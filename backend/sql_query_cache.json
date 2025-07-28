@@ -1,0 +1,58 @@
+{
+  "94df1df882950eced16e9d7cd15ac041": {
+    "question_template": "donne moi le nombre des eleves",
+    "sql_template": "SELECT \n    p.NomFr AS Nom, \n    p.PrenomFr AS Prenom, \n    e.DateNaissance, \n    c.NOMCLASSEFR AS Classe,\n    pe.Type AS TypeParent,\n    pe.NomFr AS NomParent,\n    pe.PrenomFr AS PrenomParent,\n    pe.Tel1 AS TelephoneParent\nFROM \n    eleve e\nJOIN \n    personne p ON e.IdPersonne = p.id\nJOIN \n    inscriptioneleve ie ON e.id = ie.Eleve\nJOIN \n    classe c ON ie.Classe = c.id\nJOIN \n    parenteleve pe_rel ON e.id = pe_rel.Eleve\nJOIN \n    parent pa ON pe_rel.Parent = pa.id\nJOIN \n    personne pe ON pa.Personne = pe.id\nWHERE \n    ie.AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '2023/2024')\n    AND ie.Annuler = 0\nORDER BY \n    c.NOMCLASSEFR, p.NomFr, p.PrenomFr;"
+  },
+  "61c3a921ad3abea010a938846edda4e9": {
+    "question_template": "donne moi le nombre des inscriptions pour l'annee {AnneeScolaire}",
+    "sql_template": "SELECT COUNT(*) AS nombre_inscriptions\nFROM inscriptioneleve ie\nJOIN anneescolaire a ON ie.AnneeScolaire = a.id\nWHERE a.AnneeScolaire LIKE '%{AnneeScolaire}%' AND ie.Annuler = 0;"
+  },
+  "fc54e0ace1b2fce78174740277de6bdc": {
+    "question_template": "Combien d'élèves?",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve e JOIN inscriptioneleve ie ON e.id = ie.Eleve WHERE ie.Annuler = 0"
+  },
+  "9010dbea95c13a2b7e1de0575bde0543": {
+    "question_template": "Combien d'élèves sont inscrits cette année?",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve e JOIN inscriptioneleve ie ON e.id = ie.Eleve WHERE ie.Annuler = 0"
+  },
+  "0d7ed9f7eafbae400fb45b33f0a72649": {
+    "question_template": "le nombre des inscriptions pour cette annee",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve e JOIN inscriptioneleve ie ON e.id = ie.Eleve WHERE ie.Annuler = 0"
+  },
+  "939dcdd09fbb7079f494a9c878b6fbe3": {
+    "question_template": "le nombre des eleves dans la classe {CODECLASSEFR}",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve e JOIN inscriptioneleve ie ON e.id = ie.Eleve WHERE ie.Annuler = 0"
+  },
+  "270603fff1a5aeefe5b23cb0b88c6c18": {
+    "question_template": "donne moi le nombre des classes",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve e JOIN inscriptioneleve ie ON e.id = ie.Eleve WHERE ie.Annuler = 0"
+  },
+  "5ede642e1ccfccbc7b3edaecefb9681a": {
+    "question_template": "combien de classes",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve e JOIN inscriptioneleve ie ON e.id = ie.Eleve WHERE ie.Annuler = 0"
+  },
+  "d0be599ead0d6236daf3f3abcf6f93eb": {
+    "question_template": "donne moi les retards effectué par l eleve BenAbda Malak",
+    "sql_template": "SELECT r.id, r.Date, r.Heure, r.Duree, m.NomMatiereFr AS Matiere, \n       CONCAT(p.NomFr, ' ', p.PrenomFr) AS Enseignant, r.Vu\nFROM retard r\nJOIN inscriptioneleve ie ON r.Inscription = ie.id\nJOIN eleve e ON ie.Eleve = e.id\nJOIN personne p_eleve ON e.IdPersonne = p_eleve.id\nJOIN matiere m ON r.Matiere = m.id\nJOIN enseingant ens ON r.Enseignant = ens.id\nJOIN personne p ON ens.idPersonne = p.id\nWHERE CONCAT(p_eleve.NomFr, ' ', p_eleve.PrenomFr) = 'BenAbda Malak';"
+  },
+  "a8f2db8efb48c2a54aae9217102233ec": {
+    "question_template": "donne moi lesnotes de la tirimestre {IDPersonne}  de  l eleve BenAbda Malak",
+    "sql_template": "SELECT em.libematifr AS matiere, ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre \nFROM Edumoymaticopie ed\nJOIN Edumatiere em ON ed.codemati = em.codemati\n__PROTECTED_{IDPersonne}__ Eduperiexam ex ON ed.codeperiexam = ex.codeperiexam\nJOIN Eleve e ON e.idedusrv = ed.idenelev\nJOIN personne p ON e.IdPersonne = p.id\nWHERE p.NomFr = 'BenAbda' \nAND p.PrenomFr = 'Malak'\nAND ed.codeperiexam = {IDPersonne}{IDPersonne}\nAND ed.moyemati != '0.00';"
+  },
+  "a9ed657d2fc26f5612b16c0caacbd82a": {
+    "question_template": "le nombre des eleves cette annee",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves\nFROM eleve e\nJOIN inscriptioneleve ie ON e.id = ie.Eleve\nJOIN anneescolaire a ON ie.AnneeScolaire = a.id\nWHERE a.AnneeScolaire = CONCAT(YEAR(CURDATE()), '/', YEAR(CURDATE())+1);"
+  },
+  "b4a718f8de4919bdc0ebaf3738ed6de8": {
+    "question_template": "le nombre des classes",
+    "sql_template": "SELECT COUNT(*) AS nombre_classes FROM classe;"
+  },
+  "92ea498d8cde01202dfc16e3eda95194": {
+    "question_template": "NOMBRE d'absences pour l'elevces benabda malak",
+    "sql_template": "SELECT COUNT(a.id) AS nombre_absences\nFROM absence a\nJOIN inscriptioneleve ie ON a.Inscription = ie.id\nJOIN eleve e ON ie.Eleve = e.id\nJOIN personne p ON e.IdPersonne = p.id\nWHERE CONCAT(p.NomFr, ' ', p.PrenomFr) = 'BENABDA Malak';"
+  },
+  "e0bda8197e58839fe38b56adbfec55ff": {
+    "question_template": "classes",
+    "sql_template": "SELECT \n    c.id,\n    c.CODECLASSEFR AS code_classe,\n    c.NOMCLASSEFR AS nom_classe,\n    n.NOMNIVFR AS niveau,\n    s.NomSectFr AS section,\n    a.AnneeScolaire AS annee_scolaire\nFROM \n    classe c\nJOIN \n    niveau n ON c.IDNIV = n.id\nJOIN \n    section s ON c.IDSECT = s.id\nJOIN \n    anneescolaire a ON c.ID_ANNEE_SCO = a.id\nORDER BY \n    c.ordre;"
+  }
+}
