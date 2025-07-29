@@ -37,7 +37,7 @@ def install_basic_requirements():
 def install_optional_requirements():
     """Installation des dépendances optionnelles"""
     optional_packages = [
-        ("together", "LLM Together.ai"),
+        
         ("tiktoken", "Tokenizer OpenAI"), 
         ("langchain", "Framework Langchain"),
         ("langchain-community", "Langchain Community"),

@@ -19,24 +19,5 @@
     "question_template": "donne moi le nombre des eleves inscrits pendant {AnneeScolaire}",
     "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscrits\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
   },
-  "5095f9fab6850da893f01d9a17ce6b9c": {
-    "question_template": "le nombre des eleves inscris pour {AnneeScolaire}",
-    "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscris\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
-  },
-  "129ab94e99ee478fdd2e165aebf47807": {
-    "question_template": "quelles sont  les abscence  faite par  {NomFr} {PrenomFr}",
-    "sql_template": "SELECT a.*\nFROM absence a\nJOIN inscriptioneleve ie ON a.Inscription = ie.id\nJOIN eleve e ON ie.Eleve = e.id\nJOIN personne p ON e.IdPersonne = p.id\nWHERE CONCAT(p.NomFr, ' ', p.PrenomFr) = '{NomFr} {PrenomFr}';"
-  },
-  "7dafaf9c117bebc6d407e5865e535e60": {
-    "question_template": "donne moi le nombre d'abscences par matière pour {NomFr} {PrenomFr}",
-    "sql_template": "SELECT m.NomMatiereFr, COUNT(a.id) AS nombre_absences\nFROM absence a\nJOIN inscriptioneleve ie ON a.Inscription = ie.id\nJOIN eleve e ON ie.Eleve = e.id\nJOIN personne p ON e.IdPersonne = p.id\nJOIN matiere m ON a.Matiere = m.id\nWHERE CONCAT(p.NomFr, ' ', p.PrenomFr) = '{NomFr} {PrenomFr}'\nGROUP BY m.NomMatiereFr;"
-  },
-  "1219b61d8872be8608ce6e5f90083c35": {
-    "question_template": "donne moi les moyennes par  matières pour la {codeperiexam} de l'eleve {NomFr} {PrenomFr}",
-    "sql_template": "SELECT em.libematifr AS matiere, ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre \nFROM Eduperiexam ex\nJOIN Edumoymaticopie ed ON ex.codeperiexam = ed.codeperiexam\nJOIN Edumatiere em ON ed.codemati = em.codemati\nJOIN Eleve e ON e.idedusrv = ed.idenelev\nWHERE e.Idpersonne = (SELECT id FROM personne WHERE NomFr = {NomFr} AND PrenomFr = {PrenomFr}) \nAND ed.codeperiexam = {codeperiexam} \nAND ed.moyemati NOT LIKE '0.00';"
-  },
-  "d7e86485e5fa2a7a1529814fb0a9eb92": {
-    "question_template": "donne moi le nombre des abcences de {NomFr} {PrenomFr} pour la séance de {NomMatiereFr}",
-    "sql_template": "SELECT COUNT(a.id) AS nombre_absences\nFROM absence a\nJOIN inscriptioneleve ie ON a.Inscription = ie.id\nJOIN eleve e ON ie.Eleve = e.id\nJOIN personne p ON e.IdPersonne = p.id\nJOIN matiere m ON a.Matiere = m.id\nWHERE p.NomFr = {NomFr} AND p.PrenomFr = {PrenomFr} AND m.NomMatiereFr = '{NomMatiereFr}';"
-  }
-}
+  <<<<<<< zeineb
+ 

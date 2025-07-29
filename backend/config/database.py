@@ -1,36 +1,6 @@
-# from flask_mysqldb import MySQL
-# from langchain_community.utilities import SQLDatabase
-# from urllib.parse import quote_plus
-# import os
-
-# mysql = MySQL()
-
-# def init_db(app):
-#     """Initialise la configuration MySQL pour Flask"""
-#     app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
-#     app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
-#     app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
-#     app.config['MYSQL_DB'] = os.getenv('MYSQL_DATABASE')
-#     app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-    
-#     mysql.init_app(app)
-#     return mysql
-
-# def get_db():
-#     """Retourne la connexion MySQL pour Flask (pour les routes)"""
-#     return mysql.connection
-
-# def get_db_connection():
-#     """Retourne une instance SQLDatabase de LangChain (pour l'assistant)"""
-#     db_user = os.getenv('MYSQL_USER')
-#     db_password = quote_plus(os.getenv('MYSQL_PASSWORD'))
-#     db_host = os.getenv('MYSQL_HOST')
-#     db_name = os.getenv('MYSQL_DATABASE')
-    
-#     db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
-#     return SQLDatabase.from_uri(db_uri)
 from flask_mysqldb import MySQL
 from langchain_community.utilities import SQLDatabase
+import MySQLdb
 from urllib.parse import quote_plus
 import os
 import logging
@@ -46,6 +16,8 @@ def init_db(app):
         app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
         app.config['MYSQL_DB'] = os.getenv('MYSQL_DATABASE')
         app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+        app.config['MYSQL_AUTOCOMMIT'] = True
+        app.config['MYSQL_CONNECT_TIMEOUT'] = 10
         
         # Validation des variables d'environnement
         required_vars = ['MYSQL_HOST', 'MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE']
@@ -54,19 +26,58 @@ def init_db(app):
             raise ValueError(f"Variables d'environnement manquantes: {missing_vars}")
         
         mysql.init_app(app)
-        logger.info("✅ Configuration MySQL initialisée")
+        
+        # ✅ Test de connexion immédiat
+        test_connection = create_direct_connection()
+        if test_connection:
+            test_connection.close()
+            logger.info("✅ Configuration MySQL initialisée et testée")
+        else:
+            raise Exception("Impossible de se connecter à MySQL")
+            
         return mysql
     except Exception as e:
         logger.error(f"❌ Erreur init MySQL: {e}")
         raise
 
-def get_db():
-    """Retourne la connexion MySQL pour Flask (pour les routes)"""
+def create_direct_connection():
+    """Crée une connexion MySQL directe (indépendante de Flask)"""
     try:
-        return mysql.connection
+        connection = MySQLdb.connect(
+            host=os.getenv('MYSQL_HOST'),
+            user=os.getenv('MYSQL_USER'),
+            passwd=os.getenv('MYSQL_PASSWORD'),
+            db=os.getenv('MYSQL_DATABASE'),
+            cursorclass=MySQLdb.cursors.DictCursor,
+            autocommit=True,
+            connect_timeout=10
+        )
+        # ✅ Marquer comme connexion directe pour savoir quand la fermer
+        connection._direct_connection = True
+        logger.debug("✅ Connexion MySQL directe créée")
+        return connection
     except Exception as e:
-        logger.error(f"❌ Erreur connexion Flask MySQL: {e}")
+        logger.error(f"❌ Erreur connexion MySQL directe: {e}")
         return None
+
+def get_db():
+    """Retourne la connexion MySQL - utilise d'abord Flask, puis connexion directe"""
+    try:
+        # ✅ Essayer d'abord la connexion Flask
+        from flask import current_app
+        if current_app and hasattr(mysql, 'connection') and mysql.connection:
+            # Test rapide de la connexion Flask
+            cursor = mysql.connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            logger.debug("✅ Connexion Flask MySQL OK")
+            return mysql.connection
+    except Exception as e:
+        logger.warning(f"⚠️ Connexion Flask MySQL échouée: {e}")
+    
+    # ✅ Fallback vers connexion directe
+    logger.info("🔄 Utilisation connexion MySQL directe")
+    return create_direct_connection()
 
 def get_db_connection():
     """Retourne une instance SQLDatabase de LangChain (pour l'assistant)"""
