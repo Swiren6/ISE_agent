@@ -3,7 +3,7 @@
 import requests
 import json
 
-BASE_URL = "http://localhost:5001/api"
+BASE_URL = "http://localhost:5000/api"
 
 def test_endpoints():
     print("🔍 Test des endpoints backend...")
