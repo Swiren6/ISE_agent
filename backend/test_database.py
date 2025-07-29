@@ -98,9 +98,7 @@ def test_env_variables():
     ]
     
     optional_vars = [
-        'JWT_SECRET_KEY',
-        'TOGETHER_API_KEY'
-    ]
+        'JWT_SECRET_KEY'    ]
     
     all_good = True
     
