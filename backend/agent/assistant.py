@@ -108,6 +108,7 @@ class SQLAssistant:
             self.templates_questions = []
 
     def load_question_templates(self) -> list:
+        print("🔍 Chargement des templates de questions...")
         try:
             # Chemin absolu plus fiable
             templates_path = Path(__file__).parent / 'templates_questions.json'
@@ -152,6 +153,7 @@ class SQLAssistant:
             return []
     
     def find_matching_template(self, question: str) -> Optional[Dict[str, Any]]:
+        print(f"🔍 Recherche de template pour la question")
         exact_match = self._find_exact_template_match(question)
         if exact_match:
             return exact_match

@@ -26,5 +26,9 @@
   "5fb4172953ccedc00b883b1948ed4673": {
     "question_template": "Quelle est le nombre des nouvelles inscriptions pour l'année scolaire {AnneeScolaire}",
     "sql_template": "SELECT niveau.id AS id, classe.id AS IdClasse, classe.CODECLASSEFR AS Classe, COUNT(*) AS Eleve FROM inscriptioneleve JOIN classe ON inscriptioneleve.Classe = classe.id JOIN niveau ON classe.IDNIV = niveau.id WHERE inscriptioneleve.AnneeScolaire = '{AnneeScolaire}' AND inscriptioneleve.TypeInscri = 'N' AND inscriptioneleve.annuler = 0 GROUP BY classe.CODECLASSEFR, classe.id, niveau.id ORDER BY niveau.id;"
+  },
+  "c35ed8f987d7d3b8742719c90115bf74": {
+    "question_template": "Quelle est le nombre inscriptions pour l'année scolaire {IDPersonne}",
+    "sql_template": "SELECT COUNT(*) AS nombre_inscriptions\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = {IDPersonne});"
   }
 }
