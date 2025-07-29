@@ -54,11 +54,6 @@ JOIN
      classe c ON e.Classe = c.id AND c.CODECLASSEFR = '7B2'
 **les résultats des trimestres se trouve dans le table Eduresultatcopie .
 **l id de l eleve est liée par l id de la personne par Idpersonne 
-**lorsqu'on demande les moyennes par matières pour une trimestre précise voici la requette qu on applique :
-SELECT em.libematifr AS matiere ,ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre FROM
-           Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e
-           WHERE e.idedusrv=ed.idenelev and ed.codemati=em.codemati and
-           ex.codeperiexam=ed.codeperiexam  and  e.Idpersonne=(id_de la personne) and ed.moyemati not like '0.00' and ed.codeperiexam = ( id de la trimestre  ;
 **les eleves nouvellemmnent inscris ont un TypeInscri="N" et les eleves qui ont etudié auparavant a l'ecole ont TypeInscri="R".
 **un éleves n'est pas réinscri est éleves qui est inscrits pendant l'année précédante et pas pour cette année . 
 **la décision d'acceptation consernent seulement les nouveaux eleves inscrits a l'ecole.
@@ -93,14 +88,11 @@ Requête SQL :
 class SQLAssistant:
     def __init__(self,db=None   ):
         self.db = db if db is not None else get_db_connection()
-
-
-        self.relations_description = self.load_relations()
-        self.domain_descriptions = self.load_domain_descriptions()
-        self.domain_to_tables_mapping = self.load_domain_to_tables_mapping()
+        self.relations_description = self._safe_load_relations()
+        self.domain_descriptions = self._safe_load_domain_descriptions()
+        self.domain_to_tables_mapping = self._safe_load_domain_to_tables_mapping()
         self.ask_llm = ask_llm
         self.cache =CacheManager()
-        # Initialisation du matcher
         self.template_matcher = SemanticTemplateMatcher()
         
         try:
@@ -223,17 +215,17 @@ class SQLAssistant:
         
         return requete
     
-    def load_domain_descriptions(self) -> tuple[Dict[str, str], Dict[str, List[str]]]:
-        with open('agent/prompts/domain_descriptions.json') as f:
-            return json.load(f)
+#     def load_domain_descriptions(self) -> tuple[Dict[str, str], Dict[str, List[str]]]:
+#         with open('agent/prompts/domain_descriptions.json') as f:
+#             return json.load(f)
         
-    def load_relations(self) -> str:
-        with open("agent/prompts/relations.txt", "r") as f:
-            return f.read()
+#     def load_relations(self) -> str:
+#         with open("agent/prompts/relations.txt", "r") as f:
+#             return f.read()
         
-    def load_domain_to_tables_mapping(self) ->str:
-        with open("agent/prompts/domain_tables_mapping.json", "r") as f:
-            return json.load(f)
+#     def load_domain_to_tables_mapping(self) ->str:
+#         with open("agent/prompts/domain_tables_mapping.json", "r") as f:
+#             return json.load(f)
 
     def get_relevant_domains(self, query: str, domain_descriptions: Dict[str, str]) -> List[str]:
         """Identifies relevant domains based on a user query using DeepSeek."""
@@ -314,7 +306,8 @@ class SQLAssistant:
             relations=self.relations_description
         )
 
-        sql_query = self.ask_llm(prompt)
+        llm_response = self.ask_llm(prompt)
+        sql_query = llm_response.replace("```sql", "").replace("```", "").strip()
         if not sql_query:
             return "", "❌ La requête générée est vide."
 
@@ -373,7 +366,121 @@ class SQLAssistant:
                 
                 return "\n".join(formatted)
             
-            return f"Résultat brut:\n{result}"
+            return f"{result}"
         
         except Exception as e:
             return f"❌ Erreur de formatage: {str(e)}\nRésultat brut:\n{result}"
+
+
+
+        # try:
+        #     # Chemin absolu plus fiable
+        #     templates_path = Path(__file__).parent / 'templates_questions.json'
+            
+        #     # Vérification approfondie du fichier
+        #     if not templates_path.exists():
+        #         print(f"⚠️ Fichier non trouvé, création: {templates_path}")
+        #         templates_path.write_text('{"questions": []}', encoding='utf-8')
+        #         return []
+
+        #     content = templates_path.read_text(encoding='utf-8').strip()
+        #     if not content:
+        #         print("⚠️ Fichier vide, réinitialisation")
+        #         templates_path.write_text('{"questions": []}', encoding='utf-8')
+        #         return []
+
+        #     # Validation JSON stricte
+        #     try:
+        #         data = json.loads(content)
+        #         if not isinstance(data.get("questions", []), list):
+        #             raise ValueError("Format invalide: 'questions' doit être une liste")
+                
+        #         # Validation de chaque template
+        #         valid_templates = []
+        #         for template in data["questions"]:
+        #             if all(key in template for key in ["template_question", "requete_template"]):
+        #                 valid_templates.append(template)
+        #             else:
+        #                 print(f"⚠️ Template incomplet ignoré: {template.get('description', 'sans description')}")
+                
+        #         return valid_templates
+
+        #     except json.JSONDecodeError as e:
+        #         print(f"❌ Fichier JSON corrompu, réinitialisation. Erreur: {e}")
+        #         backup_path = templates_path.with_suffix('.bak.json')
+        #         templates_path.rename(backup_path)
+        #         templates_path.write_text('{"questions": []}', encoding='utf-8')
+        #         return []
+
+        # except Exception as e:
+        #     print(f"❌ Erreur critique lors du chargement: {e}")
+        #     return []
+   
+    def _safe_load_relations(self) -> str:
+        """Charge les relations avec gestion d'erreurs"""
+        try:
+            relations_path = Path(__file__).parent / 'prompts' / 'relations.txt'
+            if relations_path.exists():
+                return relations_path.read_text(encoding='utf-8')
+            print("⚠️ Fichier relations.txt non trouvé, utilisation valeur par défaut")
+            return "# Aucune relation définie"
+        except Exception as e:
+            print(f"❌ Erreur chargement relations: {e}")
+            return "# Erreur chargement relations"
+    
+    def _safe_load_domain_descriptions(self) -> dict:
+        """Charge les descriptions de domaine avec gestion d'erreurs"""
+        try:
+            domain_path = Path(__file__).parent / 'prompts' / 'domain_descriptions.json'
+            if domain_path.exists():
+                with open(domain_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            print("⚠️ Fichier domain_descriptions.json non trouvé")
+            return {}
+        except Exception as e:
+            print(f"❌ Erreur chargement domain descriptions: {e}")
+            return {}
+    
+    def _safe_load_domain_to_tables_mapping(self) -> dict:
+        """Charge le mapping domaine-tables avec gestion d'erreurs"""
+        try:
+            mapping_path = Path(__file__).parent / 'prompts' / 'domain_tables_mapping.json'
+            if mapping_path.exists():
+                with open(mapping_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            print("⚠️ Fichier domain_tables_mapping.json non trouvé")
+            return {}
+        except Exception as e:
+            print(f"❌ Erreur chargement domain mapping: {e}")
+            return {}
+    
+    def _safe_load_question_templates(self) -> list:
+        """Charge les templates avec gestion d'erreurs robuste"""
+        try:
+            templates_path = Path(__file__).parent / 'templates_questions.json'
+            
+            if not templates_path.exists():
+                print(f"⚠️ Création fichier templates: {templates_path}")
+                templates_path.write_text('{"questions": []}', encoding='utf-8')
+                return []
+
+            content = templates_path.read_text(encoding='utf-8').strip()
+            if not content:
+                return []
+
+            data = json.loads(content)
+            if not isinstance(data.get("questions", []), list):
+                return []
+            
+            valid_templates = []
+            for template in data["questions"]:
+                if all(key in template for key in ["template_question", "requete_template"]):
+                    valid_templates.append(template)
+            
+            return valid_templates
+
+        except Exception as e:
+            print(f"❌ Erreur chargement templates: {e}")
+            return []
+
+    

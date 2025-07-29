@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask
+from flask import Flask,jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
@@ -79,12 +79,12 @@ def main():
     app = create_app()
     
     print("🚀 Assistant Scolaire - Backend démarré")
-    print(f"📍 URL: http://localhost:5001")
-    print(f"🏥 Health: http://localhost:5001/api/health")
+    print(f"📍 URL: http://localhost:5000")
+    print(f"🏥 Health: http://localhost:5000/api/health")
     
     # Démarrage du serveur
     try:
-        app.run(host='0.0.0.0', port=5001, debug=True)
+        app.run(host='0.0.0.0', port=5000, debug=True)
     except KeyboardInterrupt:
         print("👋 Serveur arrêté")
 
