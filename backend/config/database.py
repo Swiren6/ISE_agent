@@ -79,26 +79,77 @@ def get_db():
     logger.info("🔄 Utilisation connexion MySQL directe")
     return create_direct_connection()
 
+# def get_db_connection():
+#     """Retourne une instance SQLDatabase de LangChain (pour l'assistant)"""
+#     try:
+#         db_user = os.getenv('MYSQL_USER')
+#         db_password = quote_plus(os.getenv('MYSQL_PASSWORD'))
+#         db_host = os.getenv('MYSQL_HOST')
+#         db_name = os.getenv('MYSQL_DATABASE')
+        
+#         # Validation
+#         if not all([db_user, db_password, db_host, db_name]):
+#             raise ValueError("Variables de connexion DB manquantes")
+        
+#         db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+#         db = SQLDatabase.from_uri(db_uri)
+        
+#         # Test de connexion
+#         db.run("SELECT 1")
+#         logger.info("✅ Connexion LangChain SQLDatabase établie")
+#         return db
+        
+#     except Exception as e:
+#         logger.error(f"❌ Erreur connexion LangChain: {e}")
+#         return None
 def get_db_connection():
-    """Retourne une instance SQLDatabase de LangChain (pour l'assistant)"""
+    """Retourne une instance SQLDatabase personnalisée (pour l'assistant)"""
     try:
         db_user = os.getenv('MYSQL_USER')
         db_password = quote_plus(os.getenv('MYSQL_PASSWORD'))
         db_host = os.getenv('MYSQL_HOST')
         db_name = os.getenv('MYSQL_DATABASE')
-        
-        # Validation
+
         if not all([db_user, db_password, db_host, db_name]):
             raise ValueError("Variables de connexion DB manquantes")
-        
+
         db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
-        db = SQLDatabase.from_uri(db_uri)
-        
+        db = ExtendedSQLDatabase.from_uri(db_uri)
+
         # Test de connexion
         db.run("SELECT 1")
         logger.info("✅ Connexion LangChain SQLDatabase établie")
         return db
-        
+
     except Exception as e:
         logger.error(f"❌ Erreur connexion LangChain: {e}")
         return None
+
+
+class ExtendedSQLDatabase(SQLDatabase):
+    def get_schema(self):
+        try:
+            return self.run("SHOW TABLES")
+        except Exception as e:
+            logger.error(f"Erreur get_schema : {e}")
+            return {}
+
+    def get_simplified_relations_text(self):
+        try:
+            fk_relations = self.get_foreign_key_relations()
+            simplified = {}
+            for row in fk_relations:
+                table = row['TABLE_NAME']
+                referenced_table = row['REFERENCED_TABLE_NAME']
+                if table not in simplified:
+                    simplified[table] = set()
+                simplified[table].add(referenced_table)
+
+            lines = ["Relations clés principales entre tables :\n"]
+            for table, references in simplified.items():
+                line = f"- {table} liée à " + ", ".join(sorted(references)) + "."
+                lines.append(line)
+            return "\n".join(lines)
+        except Exception as e:
+            logger.error(f"Erreur get_simplified_relations_text : {e}")
+            return ""

@@ -31,5 +31,7 @@ uvicorn
 python-dotenv
 mysql-connector-python
 langchain-community
-together
+pandas
+matplotlib
+tabulate
 pydantic

@@ -354,7 +354,7 @@ class CacheManager:
         
         if "codeperiexam" in variables:
             code = variables["codeperiexam"]
-            sql = re.sub(r'codeperiexam\s*=\s*\d+', f'codeperiexam = {code}', sql)
+            sql = re.sub(r'codeperiexam\s*=\s*\d+', 'codeperiexam = {codeperiexam}', sql)
             sql = re.sub(r"'?\d+'?\s*=\s*codeperiexam", f"'{code}' = codeperiexam", sql)
             
         keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'AND', 'OR']
