@@ -9,10 +9,10 @@ def ask_llm(prompt: str) -> str:
             model="gpt-4o-mini", 
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=2048,
-            timeout=60
+            max_tokens=300
         )
         return response.choices[0].message.content
     except Exception as e:
         print(f"❌ Erreur LLM: {str(e)}")
         return ""
+      <<<<<<< zeineb
