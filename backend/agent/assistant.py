@@ -9,6 +9,8 @@ from agent.template_matcher.matcher import SemanticTemplateMatcher
 import re
 from pathlib import Path
 from agent.cache_manager import CacheManager
+from agent.sql_agent import SQLAgent
+
 
 PROMPT_TEMPLATE = PromptTemplate(
     input_variables=["input", "table_info", "relevant_domain_descriptions", "relations"],
@@ -94,6 +96,7 @@ Requête SQL :
 class SQLAssistant:
     def __init__(self,db=None   ):
         self.db = db if db is not None else get_db_connection()
+        self.sql_agent = SQLAgent(self.db)
         self.relations_description = self._safe_load_relations()
         self.domain_descriptions = self._safe_load_domain_descriptions()
         self.domain_to_tables_mapping = self._safe_load_domain_to_tables_mapping()
@@ -114,6 +117,7 @@ class SQLAssistant:
             self.templates_questions = []
 
     def load_question_templates(self) -> list:
+        print("🔍 Chargement des templates de questions...")
         try:
             # Chemin absolu plus fiable
             templates_path = Path(__file__).parent / 'templates_questions.json'
@@ -158,6 +162,7 @@ class SQLAssistant:
             return []
     
     def find_matching_template(self, question: str) -> Optional[Dict[str, Any]]:
+        print(f"🔍 Recherche de template pour la question")
         exact_match = self._find_exact_template_match(question)
         if exact_match:
             return exact_match
@@ -221,17 +226,18 @@ class SQLAssistant:
         
         return requete
     
-#     def load_domain_descriptions(self) -> tuple[Dict[str, str], Dict[str, List[str]]]:
-#         with open('agent/prompts/domain_descriptions.json') as f:
-#             return json.load(f)
+    def _filter_table_columns(self, table_block: str, question: str) -> str:
+        lines = table_block.split('\n')
+        if not lines:  # ← Ajouter cette vérification
+            return table_block
+            
+        filtered_lines = [lines[0]]  
         
-#     def load_relations(self) -> str:
-#         with open("agent/prompts/relations.txt", "r") as f:
-#             return f.read()
+        for line in lines[1:]:
+            if any(keyword.lower() in line.lower() for keyword in ['nom', 'prenom', 'date', 'absence']):
+                filtered_lines.append(line)
         
-#     def load_domain_to_tables_mapping(self) ->str:
-#         with open("agent/prompts/domain_tables_mapping.json", "r") as f:
-#             return json.load(f)
+        return '\n'.join(filtered_lines) 
 
     def get_relevant_domains(self, query: str, domain_descriptions: Dict[str, str]) -> List[str]:
         """Identifies relevant domains based on a user query using DeepSeek."""
@@ -305,11 +311,29 @@ class SQLAssistant:
         print("🔍 Aucun template trouvé, utilisation du LLM")
         if not self.db:
             raise RuntimeError("Connexion DB non initialisée")
+        # Get relevant tables and domains
+        relevant_domains = self.get_relevant_domains(question, self.domain_descriptions)
+        tables = self.get_tables_from_domains(relevant_domains, self.domain_to_tables_mapping)
+
+        # Build filtered table info
+        all_table_info = self.db.get_table_info() 
+        filtered_blocks = [
+            block for block in all_table_info.split('\n\n') 
+            if any(table in block.split('\n')[0] for table in tables)
+        ]
+
+        # Build domain descriptions
+        domain_desc = "\n".join([
+            f"{d}: {self.domain_descriptions.get(d, '')}" 
+            for d in relevant_domains
+        ])
+
+        relations = self.relations_description
         prompt = PROMPT_TEMPLATE.format(
             input=question,
-            table_info=self.db.get_table_info(),
-            relevant_domain_descriptions="\n".join(self.domain_descriptions.values()),
-            relations=self.relations_description
+            table_info="\n\n".join(filtered_blocks),  # ← Correction ici
+            relevant_domain_descriptions=domain_desc,
+            relations=relations
         )
 
         llm_response = self.ask_llm(prompt)
@@ -489,4 +513,101 @@ class SQLAssistant:
             print(f"❌ Erreur chargement templates: {e}")
             return []
 
-    
+    def get_student_info_by_name(self, full_name):
+        """Récupère les infos d'un élève depuis la base de données"""
+        return self.sql_agent.get_student_info_by_name(full_name)
+
+    def _trim_history(self):
+        while self.conversation_history and sum(msg['tokens'] for msg in self.conversation_history) > self.max_history_tokens:
+            self.conversation_history.pop(0)
+
+    def _build_response(self, response, sql_query=None, db_results=None, tokens=0, cost=0):
+        return {
+            "response": response,
+            "sql_query": sql_query,
+            "db_results": db_results,
+            "tokens_used": tokens,
+            "estimated_cost_usd": cost,
+            "conversation_id": id(self.conversation_history)
+        }
+
+    def get_response(self, user_query):
+                # ✨ Détection demande d'attestation
+        if "attestation de présence" in user_query.lower():
+            from pdf_utils.attestation import export_attestation_pdf
+
+            # 👉 Tu peux rendre ça dynamique plus tard
+            donnees_etudiant = {
+                "nom": "Rania Zahraoui",
+                "date_naissance": "15/03/2005",
+                "matricule": "2023A0512",
+                "etablissement": "Lycée Pilote de Sfax",
+                "classe": "3ème Sciences",
+                "annee_scolaire": "2024/2025",
+                "lieu": "Sfax"
+            }
+
+            pdf_path = export_attestation_pdf(donnees_etudiant)
+            return {
+                "response": f"L'attestation a été générée : <a href='/{pdf_path.replace(os.sep, '/')}' download>Télécharger le PDF</a>"
+            }
+
+        try:
+            query_tokens = self.count_tokens(user_query)
+            self.conversation_history.append({
+                'role': 'user',
+                'content': user_query,
+                'tokens': query_tokens
+            })
+
+            db_results = self.sql_agent.execute_natural_query(user_query)
+            if not db_results:
+                return self._build_response(self.response_templates["no_results"])
+
+            prompt = {
+                "role": "user",
+                "content": (
+                    f"Question: {user_query}\n"
+                    f"Requête SQL générée: {self.sql_agent.last_generated_sql}\n"
+                    f"Résultats:\n{json.dumps(db_results, ensure_ascii=False)[:800]}\n\n"
+                    "Formule une réponse claire et concise en français avec les données ci-dessus."
+                )
+            }
+
+            messages = [{
+                "role": "system",
+                "content": (
+                    "Tu es un assistant pédagogique. Reformule les résultats SQL bruts en réponse naturelle, utile et claire."
+                )
+            }, prompt]
+
+            response = openai.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=400)
+
+
+            response_text = response.choices[0].message.content.strip()
+            response_tokens = self.count_tokens(response_text)
+            self.conversation_history.append({
+                'role': 'assistant',
+                'content': response_text,
+                'tokens': response_tokens
+            })
+            self._trim_history()
+
+            prompt_tokens = response.usage.prompt_tokens
+            total_tokens = prompt_tokens + response_tokens
+            cost = total_tokens / 1000 * self.cost_per_1k_tokens
+
+            return self._build_response(
+                response_text,
+                self.sql_agent.last_generated_sql,
+                db_results,
+                total_tokens,
+                cost
+            )
+        except Exception as e:
+            logger.error(f"Erreur: {str(e)}", exc_info=True)
+            return self._build_response(self.response_templates["db_error"])

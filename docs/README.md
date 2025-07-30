@@ -11,19 +11,29 @@ assistant_scolaire/
 │   │   └── message.py            # Modèle message
 │   ├── routes/
 │   │   ├── auth.py               # Routes d'authentification
+│   │   ├── notifications.py      # Routes de notifications
 │   │   └── agent.py               # Routes de chat
 │   ├── services/
 │   │   ├── auth_service.py       # Service d'authentification
-│   │   └── sql_assistant.py     # Agent SQL avec LLM (ancien agent.py)
 |   ├──agent/
 │   │   ├──assistant.py
+│   │   ├──sql_agent.py
 │   │   ├──cache_manager.py
 │   │   ├──llm_utils.py
 │   │   ├──sql_query_cache.json
 │   │   ├──templates_questions.json
+│   │   ├── pdf_utils/
+|   |   |   ├── attestation.py
+|   |   |   ├── bulletin.py
+|   |   |   ├── fonts/ #contient les fonts d'ecriture 
+│   │   ├── static/ #contient les pdfs 
 │   │   ├── prompts/
 |   |   |   ├── domain_description.json
 |   |   |   ├── domain_tables_mapping.json
+|   |   |   ├── prompt_eleve.txt
+|   |   |   ├── prompt_finance.txt
+|   |   |   ├── prompt_inscriptions.txt
+|   |   |   ├── prompt_pedagogie.txt
 |   |   |   ├── relation.txt
 │   │   └── template_matcher
 |   |   |   ├── matcher.py

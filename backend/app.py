@@ -78,8 +78,13 @@ def create_app():
     # Enregistrement des routes
     from routes.auth import auth_bp
     from routes.agent import agent_bp
+    from routes.notifications import notifications_bp
+
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(agent_bp, url_prefix='/api')
+    app.register_blueprint(notifications_bp, url_prefix='/api')
+
+    
     
     # Route de santé avec test DB
     @app.route('/api/health')
