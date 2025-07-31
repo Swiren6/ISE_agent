@@ -16,12 +16,15 @@ if missing_vars:
     print(f"❌ Variables manquantes: {missing_vars}")
     exit(1)
 
+    
+jwt_secret = os.getenv('JWT_SECRET_KEY')
 def create_app():
     """Factory pour créer l'application Flask"""
     app = Flask(__name__)
     
     # 🔧 Configuration JWT - CRITIQUE
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-2025')
+    #app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-2025')
+    app.config['JWT_SECRET_KEY'] = jwt_secret
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     

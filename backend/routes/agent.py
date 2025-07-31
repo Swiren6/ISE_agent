@@ -1,161 +1,15 @@
-# from flask import Blueprint, request, jsonify
-# from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-# import logging
-# import traceback
-# from config.database import init_db, get_db,get_db_connection
-
-
-# agent_bp = Blueprint('agent_bp', __name__)
-# logger = logging.getLogger(__name__)
-
-# # Initialisation assistant
-# assistant = None
-# try:
-#     from agent.assistant import SQLAssistant
-#     from config.database import get_db
-
-#     assistant = SQLAssistant(db=get_db())
-
-
-#     if assistant and assistant.db:
-#         print("✅ Connexion DB disponible dans assistant")
-#     else:
-#         print("❌ Connexion DB manquante dans assistant")
-
-#     print("✅ Assistant chargé avec succès")
-# except Exception as e:
-#     print(f"❌ Erreur assistant: {e}")
-#     assistant = None
-
-# @agent_bp.route('/ask', methods=['POST'])
-# def ask_sql():  
-        
-#     # 🔧 Gestion JWT manuelle et optionnelle
-#     jwt_valid = False
-#     current_user = None
-    
-#     try:
-#         # Essayer de vérifier le JWT si présent
-#         if 'Authorization' in request.headers:
-#             print("🔑 Token JWT détecté, vérification...")
-#             verify_jwt_in_request(optional=True)
-#             current_user = get_jwt_identity()
-#             jwt_valid = True
-#             print(f"✅ JWT valide pour utilisateur: {current_user}")
-#         else:
-#             print("ℹ️ Pas de token JWT, accès anonyme")
-#     except Exception as jwt_error:
-#         print(f"⚠️ Erreur JWT (ignorée): {jwt_error}")
-#         # On continue sans JWT
-    
-#     try:
-#         # Validation JSON
-#         if not request.is_json:
-#             print("❌ Pas de JSON")
-#             return jsonify({"error": "JSON requis"}), 415
-        
-#         # Récupération données
-#         data = request.get_json()
-#         print(f"🔍 Données reçues: {data}")
-#         # print(f"🔍 Utilisateur: {current_user if jwt_valid else 'Anonyme'}")
-        
-#         if not data:
-#             print("❌ Données vides")
-#             return jsonify({"error": "Pas de données"}), 400
-        
-#         # Recherche de la question
-#         question = None
-#         field_found = None
-        
-#         possible_fields = ['question', 'subject', 'query', 'text', 'message', 'prompt']
-#         for field in possible_fields:
-#             if field in data:
-#                 value = data[field]
-#                 print(f"🔍 Champ '{field}' trouvé: {value} (type: {type(value)})")
-#                 if value and str(value).strip():
-#                     question = str(value).strip()
-#                     field_found = field
-#                     break
-        
-#         # print(f"🎯 Question finale: '{question}' (depuis champ: {field_found})")
-        
-#         if not question:
-#             print("❌ Aucune question trouvée")
-#             return jsonify({
-#                 "error": "Question manquante",
-#                 "received_fields": list(data.keys()),
-#                 "msg": "Aucune question valide trouvée"
-#             }), 422
-        
-#         # Vérification assistant
-#         if not assistant:
-#             print("❌ Assistant indisponible")
-#             return jsonify({"error": "Assistant indisponible"}), 503
-        
-#         print(f"🚀 Traitement: '{question}'")
-        
-#         # Traitement    
-#         try:
-#             sql_query, response = assistant.ask_question(question)
-#             print(f"✅ Succès: SQL={sql_query}")
-            
-#             result = {
-#                 "sql_query": sql_query,
-#                 "response": response,
-#                 "status": "success"
-#             }
-            
-#             # Ajouter info utilisateur si JWT valide
-#             if jwt_valid:
-#                 result["user"] = current_user
-            
-#             return jsonify(result), 200
-            
-#         except Exception as e:
-#             print(f"❌ Erreur traitement: {e}")
-#             print(f"❌ Traceback: {traceback.format_exc()}")
-#             return jsonify({
-#                 "error": "Erreur traitement",
-#                 "msg": str(e)
-#             }), 500
-        
-#     except Exception as e:
-#         print(f"❌ Erreur générale: {e}")
-#         print(f"❌ Traceback: {traceback.format_exc()}")
-#         return jsonify({
-#             "error": "Erreur serveur",
-#             "msg": str(e)
-#         }), 500
-        
-# @agent_bp.route('/ask', methods=['GET'])
-# def ask_info():
-#     """Information sur l'endpoint"""
-#     return jsonify({
-#         "message": "Assistant IA pour questions scolaires",
-#         "method": "POST",
-#         "format": {"question": "Votre question ici"},
-#         "status": "OK" if assistant else "ERROR"
-#     })
-
-# @agent_bp.route('/health', methods=['GET'])
-# def health():
-#     """Vérification de santé"""
-#     return jsonify({
-#         "status": "OK",
-#         "assistant": "OK" if assistant else "ERROR"
-#     })
-
-
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import  get_jwt_identity,verify_jwt_in_request
 import logging
 import traceback
-from config.database import init_db, get_db, get_db_connection
+import datetime
+from routes.auth import login
+from services.auth_service import AuthService
 
 agent_bp = Blueprint('agent_bp', __name__)
 logger = logging.getLogger(__name__)
 
-# Initialisation assistant avec gestion d'erreurs
+
 assistant = None
 
 def initialize_assistant():
@@ -182,6 +36,7 @@ def initialize_assistant():
 # Initialisation au chargement du module
 initialize_assistant()
 
+
 @agent_bp.route('/ask', methods=['POST'])
 def ask_sql():
     """Endpoint principal avec gestion d'erreurs robuste"""
@@ -194,9 +49,11 @@ def ask_sql():
         if 'Authorization' in request.headers:
             verify_jwt_in_request(optional=True)
             current_user = get_jwt_identity()
-            jwt_valid = True
-    except Exception:
-        pass  # JWT optionnel
+            jwt_valid = True if current_user else False
+            logger.debug(f"Current user data: {current_user}")
+    except Exception as e:
+        logger.warning(f"JWT verification warning: {str(e)}")
+        current_user = None
     
     try:
         # Validation JSON
@@ -234,7 +91,13 @@ def ask_sql():
         
         # Traitement de la question
         try:
-            sql_query, response = assistant.ask_question(question)
+            # Gestion sécurisée du current_user
+            user_id = current_user.get('idpersonne') if current_user and isinstance(current_user, dict) else None
+            roles = current_user.get('roles', []) if current_user and isinstance(current_user, dict) else []
+            
+            # Juste avant d'appeler assistant.ask_question():
+            logger.debug(f"[Before ask_question] user_id: {user_id}, roles: {roles}") 
+            sql_query, response = assistant.ask_question(question, user_id, roles)
             
             result = {
                 "sql_query": sql_query,
@@ -243,7 +106,7 @@ def ask_sql():
                 "question": question
             }
             
-            if jwt_valid:
+            if jwt_valid and current_user:
                 result["user"] = current_user
             
             return jsonify(result), 200
@@ -263,7 +126,7 @@ def ask_sql():
             "error": "Erreur serveur interne",
             "details": str(e)
         }), 500
-
+    
 @agent_bp.route('/ask', methods=['GET'])
 def ask_info():
     """Information sur l'endpoint"""
@@ -282,7 +145,7 @@ def health():
         "status": "OK",
         "assistant": "OK" if assistant else "ERROR",
         "database": "OK" if assistant and assistant.db else "ERROR",
-        "timestamp": "2024-01-01T00:00:00Z"  # Vous pouvez ajouter datetime.utcnow().isoformat()
+        "timestamp": "2024-01-01T00:00:00Z"  
     }
     
     status_code = 200 if assistant else 503
@@ -302,3 +165,4 @@ def reinitialize():
             "success": False,
             "error": str(e)
         }), 500
+

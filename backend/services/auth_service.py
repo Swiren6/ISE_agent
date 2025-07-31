@@ -1,57 +1,36 @@
 import json
 import logging
 from flask import current_app
-from config.database import get_db  # ✅ Correct import
+from config.database import get_db  
+import re
 
 class AuthService:
     @staticmethod
-    # def parse_roles(raw_roles):
-    #     current_app.logger.info(f"Raw roles received: {raw_roles} (type: {type(raw_roles)})")
-        
-    #     if raw_roles is None:
-    #         return []
-        
-    #     if isinstance(raw_roles, list):
-    #         return raw_roles
-        
-    #     try:
-    #         if isinstance(raw_roles, str) and raw_roles.startswith('["') and raw_roles.endswith('"]'):
-    #             parsed = json.loads(raw_roles)
-    #             return parsed
-            
-    #         if isinstance(raw_roles, str):
-    #             parsed = json.loads(raw_roles)
-    #             return parsed if isinstance(parsed, list) else [parsed]
-                
-    #     except json.JSONDecodeError as e:
-    #         current_app.logger.warning(f"JSON decode failed: {str(e)}")
-    #         return [raw_roles] if raw_roles else []
-        
-    #     return [raw_roles] if raw_roles else []
-    
-    
-    @staticmethod
     def parse_roles(raw_roles):
-        # current_app.logger.info(f"Raw roles received: {raw_roles} (type: {type(raw_roles)})")
+        current_app.logger.info(f"Raw roles received: {raw_roles} (type: {type(raw_roles)})")
         
         if raw_roles is None:
             return []
-
+        
         if isinstance(raw_roles, list):
             return raw_roles
-
+        
         try:
-            parsed = json.loads(raw_roles)
-            # current_app.logger.info(f"Parsed roles: {parsed}")
-            return parsed if isinstance(parsed, list) else [parsed]
-
+            if isinstance(raw_roles, str) and raw_roles.startswith('["') and raw_roles.endswith('"]'):
+                parsed = json.loads(raw_roles)
+                return parsed
+            
+            if isinstance(raw_roles, str):
+                parsed = json.loads(raw_roles)
+                return parsed if isinstance(parsed, list) else [parsed]
+                
         except json.JSONDecodeError as e:
-            current_app.logger.error(f"❌ JSON decode failed: {str(e)}")
+            current_app.logger.warning(f"JSON decode failed: {str(e)}")
             return [raw_roles] if raw_roles else []
-
-
-
-
+        
+        return [raw_roles] if raw_roles else []
+    
+    
 
     @staticmethod
     def authenticate_user(login_identifier, password):
@@ -83,3 +62,4 @@ class AuthService:
         except Exception as e:
             current_app.logger.error(f"Error authenticating user: {str(e)}")
             return None
+
