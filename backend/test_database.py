@@ -98,8 +98,12 @@ def test_env_variables():
     ]
     
     optional_vars = [
+<<<<<<< HEAD
         'JWT_SECRET_KEY',
     ]
+=======
+        'JWT_SECRET_KEY'    ]
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
     
     all_good = True
     
