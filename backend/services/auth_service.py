@@ -1,24 +1,52 @@
 import json
 import logging
 from flask import current_app
+<<<<<<< HEAD
+from config.database import get_db  
+import re
+=======
 from config.database import get_db
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
 
 class AuthService:
     @staticmethod
     def parse_roles(raw_roles):
+<<<<<<< HEAD
+        current_app.logger.info(f"Raw roles received: {raw_roles} (type: {type(raw_roles)})")
+        
+=======
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
         if raw_roles is None:
             return []
-
+        
         if isinstance(raw_roles, list):
             return raw_roles
-
+        
         try:
+<<<<<<< HEAD
+            if isinstance(raw_roles, str) and raw_roles.startswith('["') and raw_roles.endswith('"]'):
+                parsed = json.loads(raw_roles)
+                return parsed
+            
+            if isinstance(raw_roles, str):
+                parsed = json.loads(raw_roles)
+                return parsed if isinstance(parsed, list) else [parsed]
+                
+=======
             parsed = json.loads(raw_roles)
             return parsed if isinstance(parsed, list) else [parsed]
 
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
         except json.JSONDecodeError as e:
-            current_app.logger.error(f"❌ JSON decode failed: {str(e)}")
+            current_app.logger.warning(f"JSON decode failed: {str(e)}")
             return [raw_roles] if raw_roles else []
+<<<<<<< HEAD
+        
+        return [raw_roles] if raw_roles else []
+    
+    
+=======
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
 
     @staticmethod
     def authenticate_user(login_identifier, password):
@@ -67,6 +95,9 @@ class AuthService:
         except Exception as e:
             current_app.logger.error(f"❌ Erreur authentification: {str(e)}")
             return None
+<<<<<<< HEAD
+
+=======
             
         finally:
             # ✅ Nettoyage des ressources
@@ -84,3 +115,4 @@ class AuthService:
                     current_app.logger.debug("✅ Connexion directe fermée")
                 except:
                     pass
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6

@@ -1,15 +1,15 @@
-
-
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import  get_jwt_identity,verify_jwt_in_request
 import logging
 import traceback
-from config.database import init_db, get_db, get_db_connection
+import datetime
+from routes.auth import login
+from services.auth_service import AuthService
 
 agent_bp = Blueprint('agent_bp', __name__)
 logger = logging.getLogger(__name__)
 
-# Initialisation assistant avec gestion d'erreurs
+
 assistant = None
 
 def initialize_assistant():
@@ -36,6 +36,7 @@ def initialize_assistant():
 # Initialisation au chargement du module
 initialize_assistant()
 
+
 @agent_bp.route('/ask', methods=['POST'])
 def ask_sql():
     """Endpoint principal avec gestion d'erreurs robuste"""
@@ -48,9 +49,11 @@ def ask_sql():
         if 'Authorization' in request.headers:
             verify_jwt_in_request(optional=True)
             current_user = get_jwt_identity()
-            jwt_valid = True
-    except Exception:
-        pass  # JWT optionnel
+            jwt_valid = True if current_user else False
+            logger.debug(f"Current user data: {current_user}")
+    except Exception as e:
+        logger.warning(f"JWT verification warning: {str(e)}")
+        current_user = None
     
     try:
         # Validation JSON
@@ -88,7 +91,13 @@ def ask_sql():
         
         # Traitement de la question
         try:
-            sql_query, response = assistant.ask_question(question)
+            # Gestion sécurisée du current_user
+            user_id = current_user.get('idpersonne') if current_user and isinstance(current_user, dict) else None
+            roles = current_user.get('roles', []) if current_user and isinstance(current_user, dict) else []
+            
+            # Juste avant d'appeler assistant.ask_question():
+            logger.debug(f"[Before ask_question] user_id: {user_id}, roles: {roles}") 
+            sql_query, response = assistant.ask_question(question, user_id, roles)
             
             result = {
                 "sql_query": sql_query,
@@ -97,7 +106,7 @@ def ask_sql():
                 "question": question
             }
             
-            if jwt_valid:
+            if jwt_valid and current_user:
                 result["user"] = current_user
             
             return jsonify(result), 200
@@ -117,7 +126,7 @@ def ask_sql():
             "error": "Erreur serveur interne",
             "details": str(e)
         }), 500
-
+    
 @agent_bp.route('/ask', methods=['GET'])
 def ask_info():
     """Information sur l'endpoint"""
@@ -136,7 +145,7 @@ def health():
         "status": "OK",
         "assistant": "OK" if assistant else "ERROR",
         "database": "OK" if assistant and assistant.db else "ERROR",
-        "timestamp": "2024-01-01T00:00:00Z"  # Vous pouvez ajouter datetime.utcnow().isoformat()
+        "timestamp": "2024-01-01T00:00:00Z"  
     }
     
     status_code = 200 if assistant else 503
@@ -156,3 +165,4 @@ def reinitialize():
             "success": False,
             "error": str(e)
         }), 500
+
