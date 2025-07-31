@@ -1,0 +1,13 @@
+{
+  "questions": [
+    {
+      "template_question": "nombre d'absences de l'élève {NomFr} {PrenomFr}",
+      "requete_template": "SELECT COUNT(*) FROM absence a JOIN inscriptioneleve ie ON a.Inscription = ie.id JOIN eleve e ON ie.Eleve = e.id JOIN personne p ON e.IdPersonne = p.id WHERE p.NomFr = '{NomFr}' AND p.PrenomFr = '{PrenomFr}';"
+    },
+    {
+    "template_question": "nombre d'absences de l'élève {NomFr} {PrenomFr}",
+    "requete_template": "SELECT COUNT(a.id) AS nombre_absences FROM absence a JOIN inscriptioneleve ie ON a.Inscription = ie.id JOIN eleve e ON ie.Eleve = e.id JOIN personne p ON e.IdPersonne = p.id WHERE p.NomFr = '{NomFr}' AND p.PrenomFr = '{PrenomFr}';"
+    
+}
+  ]
+}

@@ -1,0 +1,37 @@
+# Framework Flask
+Flask==2.3.3
+Flask-JWT-Extended==4.5.3
+Flask-MySQLdb==1.0.1
+Flask-CORS==4.0.0
+
+# Base de données
+mysql-connector-python==8.2.0
+PyMySQL==1.1.0
+SQLAlchemy==2.0.23
+
+# LLM et IA (optionnel)
+together>=0.2.0
+openai>=1.0.0
+
+# Langchain (optionnel)
+langchain>=0.1.0
+langchain-community>=0.0.20
+
+# Utilitaires
+python-dotenv==1.0.0
+tiktoken==0.5.1
+
+# Logging et debugging
+colorlog==6.8.0
+
+
+
+fastapi
+uvicorn
+python-dotenv
+mysql-connector-python
+langchain-community
+pandas
+matplotlib
+tabulate
+pydantic
