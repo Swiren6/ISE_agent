@@ -1,3 +1,5 @@
+
+
 {
   "8eb4c39c88a0aa64eeff694f3976ff92": {
     "question_template": "nombre élèves",
@@ -19,5 +21,4 @@
     "question_template": "donne moi le nombre des eleves inscrits pendant {AnneeScolaire}",
     "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscrits\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
   },
-  <<<<<<< zeineb
- 
+
