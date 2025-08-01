@@ -1,3 +1,14 @@
 {
-    
+  "0b0d1f4bf8e0fbf37b375b172b4fd077": {
+    "question_template": "donne moi le nombre  des enseingnants",
+    "sql_template": "SELECT COUNT(*) AS nombre_enseignants\nFROM enseingant;"
+  },
+  "3765dc83c80283e626779cf08d19f54d": {
+    "question_template": "{nomfr} {prenomfr} {nomfr} {prenomfr} d'{nomfr} {prenomfr} l'{nomfr} {prenomfr} {nomfr} {prenomfr} matiere",
+    "sql_template": "SELECT \n    m.nomMatiereFr AS matiere,\n    COUNT(a.id) AS nombre_absences\nFROM \n    absence a\nJOIN \n    inscriptioneleve ie ON a.Inscription = ie.id\nJOIN \n    eleve e ON ie.Eleve = e.id\nJOIN \n    personne p ON e.IdPersonne = p.id\nJOIN \n    matiere m ON a.Matiere = m.id\nWHERE \n    p.NomFr = 'BENABDA' \n    AND p.PrenomFr = 'MALAK'\nGROUP BY \n    m.nomMatiereFr;"
+  },
+  "c2a9931543e872327965ca6e9ac5e201": {
+    "question_template": "{nomfr} {prenomfr} l'{nomfr} {prenomfr} l'élève {nomfr} {prenomfr} {nomfr} {prenomfr} {nomfr} {prenomfr} données?",
+    "sql_template": "SELECT e.id\nFROM eleve e\nJOIN personne p ON e.IdPersonne = p.id\nWHERE p.NomFr = 'KLAI' AND p.PrenomFr = 'ISRAA';"
+  }
 }

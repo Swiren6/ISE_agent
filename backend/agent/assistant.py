@@ -1,5 +1,5 @@
 from config.database import get_db_connection,get_db
-from langchain_community.utilities import SQLDatabase
+# from langchain_community.utilities import SQLDatabase
 from typing import List, Dict, Optional, Any, Tuple
 from agent.llm_utils import ask_llm 
 from langchain.prompts import PromptTemplate
@@ -103,6 +103,7 @@ Requête SQL :
 class SQLAssistant:
         def __init__(self,db=None   ):
             self.db = db if db is not None else get_db_connection()
+
             self.sql_agent = SQLAgent(self.db)
             self.relations_description = self._safe_load_relations()
             self.domain_descriptions = self._safe_load_domain_descriptions()
@@ -122,7 +123,6 @@ class SQLAssistant:
             except ValueError as e:
                 print(f"❌ Erreur de chargement des templates: {str(e)}")
                 self.templates_questions = []
-
         def load_question_templates(self) -> list:
             print("🔍 Chargement des templates de questions...")
             try:
@@ -166,8 +166,7 @@ class SQLAssistant:
 
             except Exception as e:
                 print(f"❌ Erreur critique lors du chargement: {e}")
-                return []
-        
+                return []        
         def find_matching_template(self, question: str) -> Optional[Dict[str, Any]]:
             print(f"🔍 Recherche de template pour la question")
             exact_match = self._find_exact_template_match(question)
@@ -180,7 +179,6 @@ class SQLAssistant:
                 return self._extract_variables(question, semantic_match)
             
             return None
-
         def _find_exact_template_match(self, question: str) -> Optional[Dict[str, Any]]:
             cleaned_question = question.rstrip(' ?')
             for template in self.templates_questions:
@@ -193,8 +191,7 @@ class SQLAssistant:
                         "template": template,
                         "variables": variables if variables else {}
                     }
-            return None
-        
+            return None    
         def _extract_variables(self, question: str, template: Dict) -> Dict[str, Any]:
             template_text = template["template_question"]
             variables = {}
@@ -217,7 +214,6 @@ class SQLAssistant:
                 "template": template,
                 "variables": variables if variables else {}
             }
-
         def generate_query_from_template(self, template: Dict, variables: Dict) -> str:
             requete = template["requete_template"]
             if not variables:
@@ -231,8 +227,7 @@ class SQLAssistant:
                 
                 requete = requete.replace(f'{{{var_name}}}', clean_value)
             
-            return requete
-        
+            return requete 
         def _filter_table_columns(self, table_block: str, question: str) -> str:
             lines = table_block.split('\n')
             if not lines:  # ← Ajouter cette vérification
@@ -245,7 +240,6 @@ class SQLAssistant:
                     filtered_lines.append(line)
             
             return '\n'.join(filtered_lines) 
-
         def get_relevant_domains(self, query: str, domain_descriptions: Dict[str, str]) -> List[str]:
             """Identifies relevant domains based on a user query using DeepSeek."""
             domain_desc_str = "\n".join([f"- {name}: {desc}" for name, desc in domain_descriptions.items()])
@@ -271,8 +265,6 @@ class SQLAssistant:
             except Exception as e:
                 print(f"❌ Erreur lors de l'identification des domaines: {e}")
                 return []
-        
-        
         def _format_tabular_result(self, headers: list, rows: list, question: str = "") -> str:
             """Formate les résultats sous forme de tableau"""
             output = [f"**{question}**"] if question else []
@@ -295,43 +287,22 @@ class SQLAssistant:
             output = [f"**{question}**"] if question else []
             output.extend(lines)
             return "\n".join(output)
-        
         def get_tables_from_domains(self, domains: List[str], domain_to_tables_map: Dict[str, List[str]]) -> List[str]:
             """Retrieves all tables associated with the given domains."""
             tables = []
             for domain in domains:
                 tables.extend(domain_to_tables_map.get(domain, []))
-            return sorted(list(set(tables)))
-    
-                
-        def debug_table_info(self, tables=None):
-            """Debug pour voir exactement ce que retourne get_table_info"""
-            try:
-                if tables:
-                    table_info = self.db.get_table_info(table_names=tables)
-                else:
-                    table_info = self.db.get_table_info()
-                
-                print("="*50)
-                print("DEBUG TABLE INFO:")
-                print("="*50)
-                print(table_info)
-                print("="*50)
-                return table_info
-            except Exception as e:
-                print(f"❌ Erreur debug_table_info: {e}")
-                return "Erreur debug"
-            
+            return sorted(list(set(tables)))     
         def _safe_load_relations(self) -> str:
             """Charge les relations avec gestion d'erreurs"""
             try:
                 relations_path = Path(__file__).parent / 'prompts' / 'relations.txt'  
-                print(f"🔍 Tentative de chargement depuis : {relations_path.absolute()}")# Log du chemin
+                # print(f"🔍 Tentative de chargement depuis : {relations_path.absolute()}")# Log du chemin
 
                           
                 if relations_path.exists():
                     content = relations_path.read_text(encoding='utf-8')
-                    print(f"✅ Contenu chargé (premières 50 lignes) :\n{content[:500]}...")  # Aperçu du contenu
+                    # print(f"✅ Contenu chargé (premières 50 lignes) :\n{content[:500]}...")  # Aperçu du contenu
                     return content
                 else:
                     print("⚠️ Fichier relations.txt non trouvé")
@@ -340,7 +311,6 @@ class SQLAssistant:
             except Exception as e:
                 print(f"❌ Erreur lors du chargement : {str(e)}")
                 return "# Erreur chargement relations"
-                
         def _safe_load_domain_descriptions(self) -> dict:
             """Charge les descriptions de domaine avec gestion d'erreurs"""
             try:
@@ -352,8 +322,7 @@ class SQLAssistant:
                 return {}
             except Exception as e:
                 print(f"❌ Erreur chargement domain descriptions: {e}")
-                return {}
-        
+                return {}      
         def _safe_load_domain_to_tables_mapping(self) -> dict:
             """Charge le mapping domaine-tables avec gestion d'erreurs"""
             try:
@@ -366,7 +335,6 @@ class SQLAssistant:
             except Exception as e:
                 print(f"❌ Erreur chargement domain mapping: {e}")
                 return {}
-        
         def _safe_load_question_templates(self) -> list:
             """Charge les templates avec gestion d'erreurs robuste"""
             try:
@@ -395,194 +363,183 @@ class SQLAssistant:
             except Exception as e:
                 print(f"❌ Erreur chargement templates: {e}")
                 return []
-
-        def get_student_info_by_name(self, full_name):
-            """Récupère les infos d'un élève depuis la base de données"""
-            return self.sql_agent.get_student_info_by_name(full_name)
-
-        def _trim_history(self):
-            while self.conversation_history and sum(msg['tokens'] for msg in self.conversation_history) > self.max_history_tokens:
-                self.conversation_history.pop(0)
-
-        def _build_response(self, response, sql_query=None, db_results=None, tokens=0, cost=0):
-            return {
-                "response": response,
-                "sql_query": sql_query,
-                "db_results": db_results,
-                "tokens_used": tokens,
-                "estimated_cost_usd": cost,
-                "conversation_id": id(self.conversation_history)
-            }
-
         def ask_question(self, question: str) -> Tuple[str, str]:
             # 1. Vérifier le cache
             cached_response = self.cache.get_cached_query(question)
             if cached_response:
-                logger.info("Cache hit!")
-                sql_query = cached_response['sql_query']
-                formatted_result = cached_response['result']
-                return sql_query, formatted_result
+                sql_template, variables = cached_response
+                sql_query = sql_template
+                for param, value in variables.items():
+                    sql_query = sql_query.replace(f"{{{param}}}", value)
+                
+                try:
+                    conn = get_db()
+                    cursor = conn.cursor(dictionary=True)  # ✅ Maintenant supporté
+                    cursor.execute(sql_query)
+                    result = cursor.fetchall()
+                    cursor.close()
+                    conn.close()
+                    
+                    formatted_result = self.format_sql_result(result, question)
+                    return sql_query, formatted_result
+                except Exception as db_error:
+                    return sql_query, f"❌ Erreur d'exécution SQL : {str(db_error)}"
 
-            # 2. Tenter de faire correspondre un template sémantique
+            # 2. Vérifier les templates
             template_match = self.find_matching_template(question)
-            template_match = self.find_matching_template(question)
-    
             if template_match:
                 sql_query = self.generate_query_from_template(
                     template_match["template"],
                     template_match.get("variables", {})
                 )
-                logger.info(f"Template match: {sql_query}")
                 
                 try:
                     conn = get_db()
                     cursor = conn.cursor(dictionary=True)
                     cursor.execute(sql_query)
-                    
                     result = cursor.fetchall()
                     cursor.close()
-                    if hasattr(conn, '_direct_connection'):
-                        conn.close()
-
+                    conn.close()
+                    
                     formatted_result = self.format_sql_result(result, question)
                     self.cache.cache_query(question, sql_query)
-                    
                     return sql_query, formatted_result
-                    
                 except Exception as db_error:
-                    error_msg = str(db_error)
-                    logger.error(f"Erreur d'exécution SQL (template): {error_msg}")
-                    return sql_query, f"❌ Erreur d'exécution SQL (template) : {error_msg}"
-                    # 3. Si aucun template ne correspond, utiliser le LLM
-            else:
-                logger.info("No template match, using LLM.")
-                table_info = self.db.get_table_info_as_str()
-                
-                relevant_tables_from_question = re.findall(r'\b(eleve|enseignant|matiere|note|absence|personnel|inscriptioneleve|parent|niveau|personne|salle|niveauetude|typepersonnel|cycleetude|section|semainematiere|annee_scolaire)\b', question, re.IGNORECASE)
-                relevant_tables_info = []
-                relevant_domains = set()
+                    return sql_query, f"❌ Erreur d'exécution SQL : {str(db_error)}"
 
-                for table_name in set(relevant_tables_from_question):
-                    table_schema = self.db.get_table_info_as_str([table_name])
-                    if table_schema:
-                        relevant_tables_info.append(table_schema)
-                        if table_name.lower() in self.domain_descriptions:
-                            relevant_domains.add(self.domain_descriptions[table_name.lower()])
-                
-                # If no specific tables are mentioned, provide schema for common tables
-                if not relevant_tables_info:
-                    logger.info("No specific tables found in question, using common tables.")
-                    common_tables = ['eleve', 'personne', 'inscriptioneleve', 'absence', 'note', 'matiere', 'enseignant', 'niveau']
-                    for table_name in common_tables:
-                        table_schema = self.db.get_table_info_as_str([table_name])
-                        if table_schema:
-                            relevant_tables_info.append(table_schema)
-                            if table_name.lower() in self.domain_descriptions:
-                                relevant_domains.add(self.domain_descriptions[table_name.lower()])
+            # 3. Génération via LLM
+            relevant_domains = self.get_relevant_domains(question, self.domain_descriptions)
+            tables = self.get_tables_from_domains(relevant_domains, self.domain_to_tables_mapping)
+            
+            if not tables:
+                tables = ['eleve', 'personne', 'inscriptioneleve', 'absence', 'note', 'matiere', 'enseignant', 'niveau']
+            
+            table_info = self.get_table_info_custom(table_names=tables)
+            domain_desc = "\n".join([f"{d}: {self.domain_descriptions.get(d, '')}" for d in relevant_domains])
 
-                filtered_blocks = [self._filter_table_columns(block, question) for block in relevant_tables_info]
-                filtered_blocks = [block for block in filtered_blocks if block.strip()] # Remove empty blocks
-                
-                domain_desc = ", ".join(sorted(list(relevant_domains))) if relevant_domains else "informations générales sur la base de données scolaire."
+            prompt = PROMPT_TEMPLATE.format(
+                input=question,
+                table_info=table_info,
+                relevant_domain_descriptions=domain_desc,
+                relations=self.relations_description
+            )
 
-                prompt = PROMPT_TEMPLATE.format(
-                    input=question,
-                    table_info="\n\n".join(filtered_blocks),
-                    relevant_domain_descriptions=domain_desc,
-                    relations=self.relations_description
-                )
-
-                llm_response = self.ask_llm(prompt)
-                sql_query = llm_response.replace("```sql", "").replace("```", "").strip()
-                
-                if not sql_query:
-                    return "", "❌ La requête générée est vide."
-
-                # Exécution de la requête
-                try:
-                    conn = get_db()
-                    cursor = conn.cursor()
-                    cursor.execute(sql_query)
-                    
-                    # Fetch results directly as DictCursor is configured
-                    result = cursor.fetchall()
-                    
-                    cursor.close()
-                    if hasattr(conn, '_direct_connection'):
-                        conn.close()
-
-                    formatted_result = self.format_sql_result(result, question)
-                    self.cache.cache_query(question, sql_query)
-                    
-                    attestation = self.generate_attestation(sql_query, formatted_result)
-                    if attestation:
-                        formatted_result += f"\n\n{attestation}"
-
-                    return sql_query, formatted_result
-                    
-                except Exception as db_error:
-                    error_msg = str(db_error)
-                    logger.error(f"Erreur d'exécution SQL : {error_msg}")
-                    return sql_query, f"❌ Erreur d'exécution SQL : {error_msg}"
-
-        
-        def format_structured_result(self, result: Any, question: str = "") -> str:
-            """Formate les résultats SQL de manière structurée"""
-            # ✅ Réutiliser la même logique que format_sql_result
-            return self.format_sql_result(result, question)
-
-        def get_response(self, user_query, user_id=None):
-            if user_id:
-                print(f"🔐 Utilisateur connecté : {user_id}")
-            # ✨ Détection demande d'attestation
-            if "attestation de présence" in user_query.lower():
-                from pdf_utils.attestation import export_attestation_pdf
-
-                # 👉 Tu peux rendre ça dynamique plus tard
-                donnees_etudiant = {
-                    "nom": "Rania Zahraoui",
-                    "date_naissance": "15/03/2005",
-                    "matricule": "2023A0512",
-                    "etablissement": "Lycée Pilote de Sfax",
-                    "classe": "3ème Sciences",
-                    "annee_scolaire": "2024/2025",
-                    "lieu": "Sfax"
-                }
-
-                pdf_path = export_attestation_pdf(donnees_etudiant)
-                return {
-                    "response": f"L'attestation a été générée : <a href='/{pdf_path.replace(os.sep, '/')}' download>Télécharger le PDF</a>"
-                }
+            llm_response = self.ask_llm(prompt)
+            sql_query = llm_response.replace("```sql", "").replace("```", "").strip()
+            
+            if not sql_query:
+                return "", "❌ La requête générée est vide."
 
             try:
-                # Utilisation de la logique SQL existante
+                conn = get_db()
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(sql_query)
+                result = cursor.fetchall()
+                cursor.close()
+                conn.close()
+
+                formatted_result = self.format_sql_result(result, question)
+                self.cache.cache_query(question, sql_query)
+                return sql_query, formatted_result
+                
+            except Exception as db_error:
+                return sql_query, f"❌ Erreur d'exécution SQL : {str(db_error)}"
+            def format_structured_result(self, result: Any, question: str = "") -> str:
+                """Formate les résultats SQL de manière structurée"""
+                # ✅ Réutiliser la même logique que format_sql_result
+                return self.format_sql_result(result, question)
+        def get_response(self, user_query, user_id=None):
+            # Détection PDF
+            if "attestation" in user_query.lower():
+                try:
+                    from agent.pdf_utils.attestation import export_attestation_pdf
+                    import re
+                    
+                    # ✅ UTILISER SQL_AGENT pour récupérer les données
+                    name_match = re.search(r"attestation de (.+?)(?:\?|$)", user_query, re.IGNORECASE)
+                    if name_match:
+                        student_name = name_match.group(1).strip()
+                        
+                        # ✅ CORRECTION : Utiliser sql_agent pour récupérer les vraies données
+                        student_data = self.sql_agent.get_student_info_by_name(student_name)
+                        
+                        if student_data:
+                            donnees_etudiant = {
+                                "nom_complet": f"{student_data.get('NomFr', '')} {student_data.get('PrenomFr', '')}".strip(),
+                                "matricule": student_data.get('matricule', 'AUTO_GEN'),
+                                "classe": student_data.get('classe', 'Non spécifiée'),
+                                "date_naissance": student_data.get('DateNaissance', ''),
+                                "lieu_naissance": student_data.get('lieu_de_naissance', 'Non précisé')
+                            }
+                        else:
+                            return {"response": f"❌ Élève '{student_name}' non trouvé dans la base de données."}
+                    else:
+                        return {"response": "❌ Nom d'élève non spécifié dans la demande d'attestation."}
+                    
+                    pdf_result = export_attestation_pdf(donnees_etudiant)
+                    
+                    if pdf_result.get("status") == "success":
+                        return {
+                            "response": f"✅ Attestation générée pour {donnees_etudiant['nom_complet']}. Fichier: {pdf_result['filename']}",
+                            "pdf_path": pdf_result['path'],
+                            "download_url": f"/static/attestations/{pdf_result['filename']}"
+                        }
+                    else:
+                        return {"response": f"❌ Erreur génération PDF: {pdf_result}"}
+                        
+                except Exception as e:
+                    return {"response": f"❌ Erreur génération attestation: {str(e)}"}
+
+            # ✅ AJOUTER : Détection bulletin
+            elif "bulletin" in user_query.lower():
+                try:
+                    from agent.pdf_utils.bulletin import export_bulletin_pdf
+                    import re
+                    
+                    # Extraire l'ID ou nom d'élève
+                    id_match = re.search(r"bulletin.*?(\d+)", user_query)
+                    name_match = re.search(r"bulletin de (.+?)(?:\?|$)", user_query, re.IGNORECASE)
+                    
+                    if id_match:
+                        student_id = int(id_match.group(1))
+                    elif name_match:
+                        student_name = name_match.group(1).strip()
+                        student_data = self.sql_agent.get_student_info_by_name(student_name)
+                        if not student_data:
+                            return {"response": f"❌ Élève '{student_name}' non trouvé."}
+                        student_id = student_data.get('matricule')
+                    else:
+                        return {"response": "❌ ID ou nom d'élève non spécifié pour le bulletin."}
+                    
+                    pdf_path = export_bulletin_pdf(student_id)
+                    
+                    return {
+                        "response": f"✅ Bulletin généré pour l'élève ID {student_id}.",
+                        "pdf_path": pdf_path,
+                        "download_url": f"/static/bulletin_{student_id}.pdf"
+                    }
+                    
+                except Exception as e:
+                    return {"response": f"❌ Erreur génération bulletin: {str(e)}"}
+            # Traitement SQL normal
+            try:
                 sql_query, formatted_result = self.ask_question(user_query)
                 
-                # Generate natural language response using LLM
                 if formatted_result and not formatted_result.startswith("❌"):
+                    # Génération réponse naturelle
                     prompt = f"""
-                    Question de l'utilisateur: {user_query}
-                    Requête SQL générée: {sql_query}
-                    Résultats: {formatted_result[:1000]}
+                    Question: {user_query}
+                    Résultats SQL: {formatted_result[:800]}
                     
-                    Tu es un assistant pédagogique. Reformule ces résultats SQL bruts en réponse naturelle, utile et claire en français.
+                    Reformule ces résultats en réponse naturelle en français, claire et utile.
                     """
+                    natural_response = self.ask_llm(prompt)
                     
-                    try:
-                        natural_response = self.ask_llm(prompt)
-                        return {
-                            "response": natural_response,
-                            "sql_query": sql_query,
-                            "raw_results": formatted_result
-                        }
-                    except Exception as llm_error:
-                        # Fallback: retourner le résultat formaté si LLM échoue
-                        return {
-                            "response": formatted_result,
-                            "sql_query": sql_query,
-                            "raw_results": formatted_result,
-                            "llm_error": str(llm_error)
-                        }
+                    return {
+                        "response": natural_response,
+                        "sql_query": sql_query,
+                        "raw_results": formatted_result
+                    }
                 else:
                     return {
                         "response": formatted_result or "Aucun résultat trouvé.",
@@ -591,52 +548,10 @@ class SQLAssistant:
                     
             except Exception as e:
                 return {
-                    "response": f"Désolé, une erreur s'est produite: {str(e)}",
-                    "sql_query": None,
+                    "response": f"Erreur: {str(e)}",
                     "error": str(e)
                 }
-                
         def format_sql_result(self, result: Any, question: str = "") -> str:
-            """Formate les résultats SQL de manière robuste"""
-            if not result:
-                return "✅ Requête exécutée mais aucun résultat trouvé."
-
-            try:
-                # Cas 1: Résultat est déjà une string
-                if isinstance(result, str):
-                    return self._format_string_result(result, question)
-                
-                # Cas 2: Résultat est un dictionnaire (pour COUNT, SUM etc.)
-                if isinstance(result, dict):
-                    return "\n".join([f"{k}: {v}" for k, v in result.items()])
-                
-                # Cas 3: Résultat est une liste
-                if isinstance(result, list):
-                    if not result:
-                        return "✅ Requête exécutée mais aucun résultat trouvé."
-                        
-                    # Cas 3.1: Liste de dictionnaires
-                    if isinstance(result[0], dict):
-                        headers = list(result[0].keys())
-                        rows = [[str(row.get(h, '')) for h in headers] for row in result]
-                        return self._format_tabular_result(headers, rows, question)
-                    
-                    # Cas 3.2: Liste de tuples/listes
-                    elif isinstance(result[0], (tuple, list)):
-                        if cursor := getattr(self.db, '_last_cursor', None):
-                            headers = [desc[0] for desc in cursor.description]
-                        else:
-                            headers = [f"Colonne_{i+1}" for i in range(len(result[0]))]
-                        
-                        rows = [[str(cell) for cell in row] for row in result]
-                        return self._format_tabular_result(headers, rows, question)
-                
-                # Cas par défaut
-                return f"Résultat : {str(result)}"
-            
-            except Exception as e:
-                return f"❌ Erreur de formatage : {str(e)}\nRésultat brut: {str(result)[:500]}"       
-        
             """Traite une question et retourne la requête SQL et la réponse formatée"""
             # 1. Vérification du cache
             cached = self.cache.get_cached_query(question)
@@ -746,3 +661,41 @@ class SQLAssistant:
             except Exception as db_error:
                 error_msg = str(db_error)
                 return sql_query, f"❌ Erreur d'exécution SQL : {error_msg}"
+            
+        def get_table_info_custom(self, table_names=None):
+            """Récupère les informations des tables depuis MySQL"""
+            try:
+                conn = get_db()
+                cursor = conn.cursor(dictionary=True)
+                
+                if table_names:
+                    # Informations pour tables spécifiques
+                    table_info = []
+                    for table in table_names:
+                        cursor.execute(f"DESCRIBE {table}")
+                        columns = cursor.fetchall()
+                        table_info.append(f"Table: {table}")
+                        for col in columns:
+                            table_info.append(f"  {col['Field']} ({col['Type']})")
+                        table_info.append("")
+                else:
+                    # Toutes les tables
+                    cursor.execute("SHOW TABLES")
+                    tables = cursor.fetchall()
+                    table_info = []
+                    for table_row in tables:
+                        table_name = list(table_row.values())[0]
+                        cursor.execute(f"DESCRIBE {table_name}")
+                        columns = cursor.fetchall()
+                        table_info.append(f"Table: {table_name}")
+                        for col in columns:
+                            table_info.append(f"  {col['Field']} ({col['Type']})")
+                        table_info.append("")
+                
+                cursor.close()
+                conn.close()
+                return "\n".join(table_info)
+                
+            except Exception as e:
+                print(f"❌ Erreur get_table_info: {e}")
+                return "Erreur récupération schéma"
