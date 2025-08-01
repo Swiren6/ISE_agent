@@ -4,6 +4,7 @@ import MySQLdb
 from urllib.parse import quote_plus
 import os
 import logging
+from contextlib import contextmanager
 
 mysql = MySQL()
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ def get_db():
     logger.info("🔄 Utilisation connexion MySQL directe")
     return create_direct_connection()
 
+
 def get_db_connection():
     """Retourne une instance SQLDatabase de LangChain (pour l'assistant)"""
     try:
@@ -102,3 +104,18 @@ def get_db_connection():
     except Exception as e:
         logger.error(f"❌ Erreur connexion LangChain: {e}")
         return None
+    
+@contextmanager
+def get_db_connection_1():
+    """Context manager pour gérer les connexions MySQL proprement"""
+    connection = None
+    try:
+        connection = get_db()
+        yield connection
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise e
+    finally:
+        if connection:
+            connection.close()

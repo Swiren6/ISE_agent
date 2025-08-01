@@ -493,8 +493,10 @@ from pathlib import Path
 from agent.cache_manager import CacheManager
 from services.auth_service import AuthService
 import logging
+from config.database import get_db_connection_1  
 
 logger = logging.getLogger(__name__)
+
 # Template pour les super admins (accès complet)
 ADMIN_PROMPT_TEMPLATE = PromptTemplate(
     input_variables=["input", "table_info", "relevant_domain_descriptions", "relations"],
@@ -691,46 +693,81 @@ class SQLAssistant:
             print(f"❌ Erreur de chargement des templates: {str(e)}")
             self.templates_questions = []
 
+
+    # def get_user_children_ids(self, user_id: int) -> List[int]:
+    #     connection = None
+    #     cursor = None
+
+    #     """Récupère les IDs des enfants d'un parent"""
+    #     try:
+    #         query = """
+    #         SELECT DISTINCT pe.id AS id_enfant
+    #         FROM personne p
+    #         JOIN parent pa ON p.id = pa.Personne
+    #         JOIN parenteleve pev ON pa.id = pev.Parent
+    #         JOIN eleve e ON pev.Eleve = e.id
+    #         JOIN personne pe ON e.IdPersonne = pe.id
+    #         WHERE p.id = %s
+    #         """
+            
+    #         connection = get_db()
+    #         cursor = connection.cursor()
+    #         cursor.execute(query, (user_id,))
+            
+    #         users = cursor.fetchall() 
+            
+    #         children_ids = []
+            
+    #         if users:
+    #             for user in users:
+    #                 child_id = user['id_enfant']
+    #                 children_ids.append(child_id)
+    #                 print(f"✅ Enfant trouvé: {child_id}")
+            
+    #         print(f"🎯 Tous les enfants pour parent {user_id}: {children_ids}")
+            
+    #         # Fermer proprement la connexion
+    #         return children_ids
+            
+    #     except Exception as e:
+    #         print(f"❌ Erreur récupération enfants pour parent {user_id}: {e}")
+    #         import traceback
+    #         print(f"❌ Traceback: {traceback.format_exc()}")
+    #         return []
+    #     finally:
+    #         if cursor:
+    #             cursor.close()
+    #         if connection:
+    #             connection.close()
+
     def get_user_children_ids(self, user_id: int) -> List[int]:
-        """Récupère les IDs des enfants d'un parent"""
+        """Version avec context manager"""
         try:
             query = """
-            SELECT 
-                pe.id AS id_enfant
-            FROM 
-                personne p
-            JOIN 
-                parent pa ON p.id = pa.Personne
-            JOIN 
-                parenteleve pev ON pa.id = pev.Parent
-            JOIN 
-                eleve e ON pev.Eleve = e.id
-            JOIN 
-                personne pe ON e.IdPersonne = pe.id
-            WHERE 
-                p.id = %s;
-         """
-            result = self.db.run(query, (user_id,))
+            SELECT DISTINCT pe.id AS id_enfant
+            FROM personne p
+            JOIN parent pa ON p.id = pa.Personne
+            JOIN parenteleve pev ON pa.id = pev.Parent
+            JOIN eleve e ON pev.Eleve = e.id
+            JOIN personne pe ON e.IdPersonne = pe.id
+            WHERE p.id = %s
+            """
             
-            # Parse le résultat pour extraire les IDs
-            children_ids = []
-            if result and result != "[]":
-                lines = result.strip().split('\n')
-                for line in lines:
-                    if line.strip() and line.strip().isdigit():
-                        children_ids.append(int(line.strip()))
-                    elif '|' in line:  
-                        parts = line.split('|')
-                        for part in parts:
-                            if part.strip().isdigit():
-                                children_ids.append(int(part.strip()))
-            
-            print(f"🔍 Enfants trouvés pour parent {user_id}: {children_ids}")
+            with get_db_connection_1() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(query, (user_id,))
+                    users = cursor.fetchall()
+                    children_ids = [user['id_enfant'] for user in users] if users else []
+                    
+            print(f"🎯 Enfants trouvés pour parent {user_id}: {children_ids}")
             return children_ids
             
         except Exception as e:
             print(f"❌ Erreur récupération enfants: {e}")
             return []
+
+
+
 
     def is_super_admin(self, roles: List[str]) -> bool:
         """Vérifie si l'utilisateur est super admin"""
@@ -741,105 +778,173 @@ class SQLAssistant:
         """Vérifie si l'utilisateur est un parent"""
         return 'ROLE_PARENT' in [role.upper() for role in roles]
 
+    # def validate_parent_access(self, sql_query: str, children_ids: List[int]) -> bool:
+    #     """Valide qu'une requête respecte les restrictions d'accès parent"""
+    #     if not children_ids:
+    #         return False
+            
+    #     children_ids_str = [str(id) for id in children_ids]
+        
+    #     # Vérifier que la requête contient un filtre sur les enfants autorisés
+    #     sql_lower = sql_query.lower()
+        
+    #     # Patterns de sécurité à vérifier
+    #     security_patterns = [
+    #         f"idpersonne in ({','.join(children_ids_str)})",
+    #         f"idpersonne = {children_ids_str[0]}" if len(children_ids_str) == 1 else None,
+    #         "eleve in (select id from eleve where idpersonne in",
+    #         "e.idpersonne in"
+    #     ]
+        
+    #     # Au moins un pattern de sécurité doit être présent
+    #     has_security_filter = any(
+    #         pattern and pattern in sql_lower 
+    #         for pattern in security_patterns
+    #     )
+        
+    #     if not has_security_filter:
+    #         print(f"❌ Requête parent sans filtre de sécurité: {sql_query}")
+    #         return False
+            
+    #     return True
+
     def validate_parent_access(self, sql_query: str, children_ids: List[int]) -> bool:
-        """Valide qu'une requête respecte les restrictions d'accès parent"""
+        # Validation des inputs
+        if not isinstance(children_ids, list):
+            raise TypeError("children_ids doit être une liste")
+            
         if not children_ids:
             return False
             
-        # Convertir les IDs en string pour la recherche
-        children_ids_str = [str(id) for id in children_ids]
+        try:
+            children_ids_str = [str(int(id)) for id in children_ids]
+        except (ValueError, TypeError):
+            raise ValueError("Tous les IDs enfants doivent être numériques")
         
-        # Vérifier que la requête contient un filtre sur les enfants autorisés
-        sql_lower = sql_query.lower()
+        # Normalisation plus douce de la requête (garder un espace pour séparer les mots)
+        sql_lower = sql_query.lower().replace("\n", " ").replace("\t", " ")
+        # Normaliser les espaces multiples en un seul
+        import re
+        sql_lower = re.sub(r'\s+', ' ', sql_lower).strip()
         
-        # Patterns de sécurité à vérifier
-        security_patterns = [
-            f"idpersonne in ({','.join(children_ids_str)})",
-            f"idpersonne = {children_ids_str[0]}" if len(children_ids_str) == 1 else None,
-            "eleve in (select id from eleve where idpersonne in",
-            "e.idpersonne in"
-        ]
+        print(f"🔍 SQL normalisé: {sql_lower}")  # Debug
+        print(f"👶 IDs enfants: {children_ids_str}")  # Debug
         
-        # Au moins un pattern de sécurité doit être présent
-        has_security_filter = any(
-            pattern and pattern in sql_lower 
-            for pattern in security_patterns
-        )
+        # Préparation des motifs de sécurité
+        security_patterns = set()
         
-        if not has_security_filter:
-            print(f"❌ Requête parent sans filtre de sécurité: {sql_query}")
+        # 1. Filtres directs avec plus de variantes
+        if len(children_ids_str) == 1:
+            child_id = children_ids_str[0]
+            security_patterns.update({
+                f"idpersonne = {child_id}",
+                f"idpersonne={child_id}",
+                f"e.idpersonne = {child_id}",
+                f"e.idpersonne={child_id}",
+                f"eleve.idpersonne = {child_id}",
+                f"eleve.idpersonne={child_id}"
+            })
+        else:
+            ids_joined = ",".join(children_ids_str)
+            ids_joined_spaced = ", ".join(children_ids_str)
+            security_patterns.update({
+                f"idpersonne in ({ids_joined})",
+                f"idpersonne in({ids_joined})",
+                f"idpersonne in ({ids_joined_spaced})",
+                f"e.idpersonne in ({ids_joined})",
+                f"e.idpersonne in({ids_joined})",
+                f"e.idpersonne in ({ids_joined_spaced})",
+                f"eleve.idpersonne in ({ids_joined})",
+                f"eleve.idpersonne in({ids_joined})",
+                f"eleve.idpersonne in ({ids_joined_spaced})",
+                f"id_personne in ({ids_joined})",
+                f"id_personne in({ids_joined})",
+                f"id_personne in ({ids_joined_spaced})"
+            })
+        
+        # 2. Sous-requêtes de sécurité (patterns plus complets)
+        for child_id in children_ids_str:
+            security_patterns.update({
+                f"eleve in (select id from eleve where idpersonne = {child_id}",
+                f"eleve in (select id from eleve where idpersonne={child_id}",
+                f"exists (select 1 from eleve where idpersonne = {child_id}",
+                f"exists (select 1 from eleve where idpersonne={child_id}",
+                f"exists(select 1 from eleve where idpersonne = {child_id}",
+                f"exists(select 1 from eleve where idpersonne={child_id}",
+                f"ed.idenelev IN (SELECT id FROM eleve WHERE IdPersonne IN {child_id})",
+                f"e.idpersonne in ({child_id})"
+            })
+        
+        # Pour les listes d'IDs
+        if len(children_ids_str) > 1:
+            ids_joined = ",".join(children_ids_str)
+            ids_joined_spaced = ", ".join(children_ids_str)
+            security_patterns.update({
+                f"eleve in (select id from eleve where idpersonne in ({ids_joined})",
+                f"eleve in (select id from eleve where idpersonne in({ids_joined})",
+                f"eleve in (select id from eleve where idpersonne in ({ids_joined_spaced})",
+                f"exists (select 1 from eleve where idpersonne in ({ids_joined})",
+                f"exists (select 1 from eleve where idpersonne in({ids_joined})",
+                f"exists (select 1 from eleve where idpersonne in ({ids_joined_spaced})",
+                f"exists(select 1 from eleve where idpersonne in ({ids_joined})",
+                f"exists(select 1 from eleve where idpersonne in({ids_joined})",
+                f"exists(select 1 from eleve where idpersonne in ({ids_joined_spaced})"
+            })
+        
+        print(f"🔒 Patterns de sécurité recherchés:")
+        for pattern in sorted(security_patterns):
+            print(f"   - '{pattern}'")
+        
+        # 3. Vérification des motifs
+        found_patterns = []
+        for pattern in security_patterns:
+            if pattern in sql_lower:
+                found_patterns.append(pattern)
+        
+        print(f"✅ Patterns trouvés: {found_patterns}")
+        
+        if not found_patterns:
+            logger.warning(f"Requête parent non sécurisée - Filtre enfants manquant: {sql_query}")
+            print(f"❌ Aucun pattern de sécurité trouvé dans la requête")
             return False
-            
+        
+        # 4. Vérification des injections potentielles
+        forbidden_patterns = {
+             "--", "/*", "*/", " drop ", " truncate ", " insert ", " update ", " delete "
+        }
+        found_forbidden = [pattern for pattern in forbidden_patterns if pattern in sql_lower]
+        
+        if found_forbidden:
+            logger.error(f"Tentative de requête non autorisée détectée: {found_forbidden}")
+            print(f"❌ Patterns interdits trouvés: {found_forbidden}")
+            return False
+        
+        print(f"✅ Validation parent réussie")
         return True
-
-
-    # def ask_question(self, question: str, user_data: Optional[Dict] = None) -> tuple[str, str]:
-    #     """
-    #     Traite une question avec contrôle d'accès basé sur les rôles
-        
-    #     Args:
-    #         question: La question à traiter
-    #         user_data: Dictionnaire contenant:
-    #             - 'idpersonne': int - ID de l'utilisateur
-    #             - 'roles': List[str] - Liste des rôles de l'utilisateur
-    #     """
-        
-    #     # Validation de la question
-    #     if not question or not isinstance(question, str) or not question.strip():
-    #         return "", "❌ Question invalide ou vide."
-        
-    #     # Gestion des requêtes non authentifiées (si autorisé)
-    #     if user_data is None:
-    #         return "", "❌ Données utilisateur manquantes pour le contrôle d'accès."
-        
-    #     # Validation des données utilisateur
-    #     try:
-    #         user_id = int(user_data.get('idpersonne', 0))
-    #         roles = [r.upper() for r in user_data.get('roles', []) if isinstance(r, str)]
-            
-    #         if user_id <= 0:
-    #             return "", "❌ ID utilisateur invalide."
-                
-    #         if not roles:
-    #             return "", "❌ Aucun rôle défini pour cet utilisateur."
-                
-    #     except (ValueError, TypeError, AttributeError) as e:
-    #         print(f"❌ Erreur traitement données utilisateur: {e}")
-    #         return "", "❌ Format des données utilisateur invalide."
-        
-    #     print(f"🔐 Contrôle d'accès - Utilisateur: {user_id}, Rôles: {', '.join(roles)}")
-        
-    #     # Déterminer le niveau d'accès
-    #     try:
-    #         if self.is_super_admin(roles):
-    #             print("✅ Accès SUPER ADMIN - Pas de restrictions")
-    #             return self._process_admin_question(question)
-                
-    #         elif self.is_parent(roles):
-    #             print("🔒 Accès PARENT - Restrictions appliquées")
-    #             return self._process_parent_question(question, user_id)
-                
-    #         else:
-    #             # Ajout d'une suggestion pour les rôles inconnus
-    #             known_roles = ["ROLE_SUPER_ADMIN", "ROLE_PARENT"]  # À adapter selon vos besoins
-    #             suggestion = ""
-    #             if not any(r in known_roles for r in roles):
-    #                 suggestion = " (Aucun rôle reconnu)"
-    #             return "", f"❌ Rôle non autorisé: {', '.join(roles)}{suggestion}. Contactez l'administrateur."
-                
-    #     except Exception as e:
-    #         print(f"❌ Erreur lors du traitement de la question: {e}")
-    #         return "", f"❌ Erreur interne lors du traitement de votre question: {str(e)}"
 
     def ask_question(self, question: str, user_id: int, roles: List[str]) -> tuple[str, str]:
         """Version strictement authentifiée"""
+
+        print(f"DEBUG ask_question - user_id: {user_id}")
+        print(f"DEBUG ask_question - roles: {roles}")
+        print(f"DEBUG ask_question - roles type: {type(roles)}")
+        
         # 1. Validation des rôles
-        if not any(role in ['ROLE_ADMIN', 'ROLE_PARENT'] for role in roles):
-            return "", "❌ Accès refusé : Rôle insuffisant"
+        if not roles:
+            return "", "❌ Accès refusé : Aucun rôle fourni"
+        
+        valid_roles = ['ROLE_SUPER_ADMIN', 'ROLE_PARENT']
+        has_valid_role = any(role in valid_roles for role in roles)
+        
+        print(f"DEBUG - valid_roles: {valid_roles}")
+        print(f"DEBUG - has_valid_role: {has_valid_role}")
+        
+        if not has_valid_role:
+            return "", f"❌ Accès refusé : Rôles fournis {roles}, requis {valid_roles}"
 
         # 2. Traitement par rôle
         try:
-            if 'ROLE_ADMIN' in roles:
+            if 'ROLE_SUPER_ADMIN' in roles:
                 return self._process_admin_question(question)
             elif 'ROLE_PARENT' in roles:
                 return self._process_parent_question(question, user_id)
@@ -909,7 +1014,7 @@ class SQLAssistant:
         # Récupérer les enfants du parent
         children_ids = self.get_user_children_ids(user_id)
         if not children_ids:
-            return "", "❌ Aucun enfant trouvé pour ce parent ou erreur d'accès."
+             return "", "❌ Aucun enfant trouvé pour ce parent  ou erreur d'accès."
         
         print(f"🔒 Restriction parent - Enfants autorisés: {children_ids}")
         

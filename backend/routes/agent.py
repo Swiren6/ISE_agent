@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import  get_jwt_identity,verify_jwt_in_request
+from flask import Blueprint, request, jsonify,g
+from flask_jwt_extended import get_jwt_identity,verify_jwt_in_request,get_jwt, get_jwt_identity
 import logging
 import traceback
 import datetime
@@ -37,26 +37,131 @@ def initialize_assistant():
 initialize_assistant()
 
 
+# @agent_bp.route('/ask', methods=['POST'])
+# def ask_sql():
+#     """Endpoint principal avec gestion d'erreurs robuste"""
+    
+#     # Gestion JWT optionnelle
+#     jwt_valid = False
+#     current_user = None
+#     try:
+#         if 'Authorization' in request.headers:
+#             verify_jwt_in_request(optional=True)
+#             current_user = get_jwt_identity()
+#             jwt_valid = True if current_user else False
+#     except Exception as e:
+#         logger.warning(f"JWT verification warning: {str(e)}")
+#         current_user = None
+    
+#     try:
+#         # Validation JSON
+#         if not request.is_json:
+#             return jsonify({"error": "Content-Type application/json requis"}), 415
+        
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Corps de requête JSON vide"}), 400
+        
+#         # Extraction de la question
+#         question = None
+#         possible_fields = ['question', 'subject', 'query', 'text', 'message', 'prompt']
+        
+#         for field in possible_fields:
+#             if field in data and data[field] and str(data[field]).strip():
+#                 question = str(data[field]).strip()
+#                 break
+        
+#         if not question:
+#             return jsonify({
+#                 "error": "Question manquante",
+#                 "expected_fields": possible_fields,
+#                 "received_fields": list(data.keys())
+#             }), 422
+        
+#         # Vérification assistant
+#         if not assistant:
+#             if not initialize_assistant():
+#                 return jsonify({
+#                     "error": "Assistant non disponible",
+#                     "details": "Impossible d'initialiser l'assistant IA"
+#                 }), 503
+        
+#         try:
+#             user_id = current_user.get('idpersonne') if current_user and isinstance(current_user, dict) else None
+#             roles = current_user.get('roles', []) if current_user and isinstance(current_user, dict) else []
+
+#             sql_query, response = assistant.ask_question(question, user_id, roles)
+    
+            
+#             result = {
+#                 "sql_query": sql_query,
+#                 "response": response,
+#                 "status": "success",
+#                 "question": question
+#             }
+            
+#             if jwt_valid and current_user:
+#                 result["user"] = current_user
+            
+#             return jsonify(result), 200
+            
+#         except Exception as processing_error:
+#             logger.error(f"Erreur traitement: {processing_error}")
+#             return jsonify({
+#                 "error": "Erreur de traitement",
+#                 "details": str(processing_error),
+#                 "question": question
+#             }), 500
+        
+#     except Exception as e:
+#         logger.error(f"Erreur générale: {e}")
+#         logger.error(traceback.format_exc())
+#         return jsonify({
+#             "error": "Erreur serveur interne",
+#             "details": str(e)
+#         }), 500
 @agent_bp.route('/ask', methods=['POST'])
 def ask_sql():
-    """Endpoint principal avec gestion d'erreurs robuste"""
+    """Version corrigée pour lire le JWT avec claims"""
     
-    # Gestion JWT optionnelle
     jwt_valid = False
     current_user = None
+    jwt_error = None
     
     try:
         if 'Authorization' in request.headers:
-            verify_jwt_in_request(optional=True)
-            current_user = get_jwt_identity()
-            jwt_valid = True if current_user else False
-            logger.debug(f"Current user data: {current_user}")
+            try:
+                verify_jwt_in_request(optional=True)
+                
+                # Récupération de l'identity (subject)
+                jwt_identity = get_jwt_identity()  # Sera une string maintenant
+                
+                # Récupération des claims additionnels
+                jwt_claims = get_jwt()
+                
+                print(f"DEBUG - JWT Identity: {jwt_identity}")
+                print(f"DEBUG - JWT Claims: {jwt_claims}")
+                
+                # Construction de current_user
+                if jwt_identity and jwt_claims:
+                    current_user = {
+                        'sub': jwt_identity,
+                        'idpersonne': jwt_claims.get('idpersonne'),
+                        'roles': jwt_claims.get('roles', []),
+                        'username': jwt_claims.get('username', '')
+                    }
+                    jwt_valid = True
+                    
+            except Exception as jwt_exc:
+                jwt_error = str(jwt_exc)
+                print(f"DEBUG - Erreur JWT: {jwt_error}")
+                current_user = None
+                
     except Exception as e:
-        logger.warning(f"JWT verification warning: {str(e)}")
-        current_user = None
+        jwt_error = str(e)
+        print(f"DEBUG - Erreur générale JWT: {jwt_error}")
     
     try:
-        # Validation JSON
         if not request.is_json:
             return jsonify({"error": "Content-Type application/json requis"}), 415
         
@@ -80,63 +185,42 @@ def ask_sql():
                 "received_fields": list(data.keys())
             }), 422
         
+        user_id = current_user.get('idpersonne') if current_user else None
+        roles = current_user.get('roles', []) if current_user else []
+        
+        print(f"DEBUG FINAL - user_id: {user_id}, roles: {roles}")
+        
         # Vérification assistant
         if not assistant:
-            # Tentative de réinitialisation
             if not initialize_assistant():
                 return jsonify({
                     "error": "Assistant non disponible",
                     "details": "Impossible d'initialiser l'assistant IA"
                 }), 503
         
-        # Traitement de la question
-        try:
-            # Gestion sécurisée du current_user
-            user_id = current_user.get('idpersonne') if current_user and isinstance(current_user, dict) else None
-            roles = current_user.get('roles', []) if current_user and isinstance(current_user, dict) else []
-            
-            # Juste avant d'appeler assistant.ask_question():
-            logger.debug(f"[Before ask_question] user_id: {user_id}, roles: {roles}") 
-            sql_query, response = assistant.ask_question(question, user_id, roles)
-            
-            result = {
-                "sql_query": sql_query,
-                "response": response,
-                "status": "success",
-                "question": question
+        sql_query, response = assistant.ask_question(question, user_id, roles)
+        
+        result = {
+            "sql_query": sql_query,
+            "response": response,
+            "status": "success",
+            "question": question,
+            "debug": {
+                "jwt_valid": jwt_valid,
+                "jwt_error": jwt_error,
+                "user_id": user_id,
+                "roles": roles
             }
-            
-            if jwt_valid and current_user:
-                result["user"] = current_user
-            
-            return jsonify(result), 200
-            
-        except Exception as processing_error:
-            logger.error(f"Erreur traitement: {processing_error}")
-            return jsonify({
-                "error": "Erreur de traitement",
-                "details": str(processing_error),
-                "question": question
-            }), 500
+        }
+        
+        return jsonify(result), 200
         
     except Exception as e:
         logger.error(f"Erreur générale: {e}")
-        logger.error(traceback.format_exc())
         return jsonify({
             "error": "Erreur serveur interne",
             "details": str(e)
         }), 500
-    
-@agent_bp.route('/ask', methods=['GET'])
-def ask_info():
-    """Information sur l'endpoint"""
-    return jsonify({
-        "message": "Assistant IA pour questions scolaires",
-        "method": "POST",
-        "format": {"question": "Votre question ici"},
-        "status": "OK" if assistant else "ERROR",
-        "assistant_available": assistant is not None
-    })
 
 @agent_bp.route('/health', methods=['GET'])
 def health():
