@@ -1,28 +1,29 @@
 import openai
-import logging
+import os
 import re
 import json
 from functools import lru_cache
 from decimal import Decimal
+import matplotlib.pyplot as plt
 from datetime import datetime
 from config.database import get_db_connection
 from tabulate import tabulate
+from openai import OpenAI
+from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import base64
 import tempfile
-import os
 import matplotlib
-
+import logging
 
 matplotlib.use('Agg') 
-import matplotlib.pyplot as plt
-
 
 logger = logging.getLogger(__name__)
 
 class SQLAgent:
     def __init__(self, db, model="gpt-4o", temperature=0.3, max_tokens=500):
+        # self.openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         self.db = db if db else get_db_connection()
         self.model = model
         self.temperature = temperature
@@ -48,10 +49,10 @@ class SQLAgent:
 
     def load_prompt_for_query(self, query):
         if any(word in query.lower() for word in ["nom", "élève", "classe", "parent", "inscription"]):
-            path = "prompts/prompt_eleve.txt"
+            path = Path(__file__).parent / "prompts" / "prompt_eleve.txt" 
             extra_info = ""
         elif any(word in query.lower() for word in ["note", "matière", "absence", "emploi", "moyenne"]):
-            path = "prompts/prompt_pedagogie.txt"
+            path = Path(__file__).parent / "prompts" / "prompt_pedagogie.txt"
             # Injection du texte des relations FK dans le prompt pédagogique
             try:
                 extra_info = "\n\n" + self.db.get_simplified_relations_text()
@@ -59,10 +60,10 @@ class SQLAgent:
                 logger.error(f"Erreur récupération relations FK : {e}")
                 extra_info = ""
         elif any(word in query.lower() for word in ["paiement", "tranche", "cantine", "montant", "transport"]):
-            path = "prompts/prompt_finance.txt"
+            path = Path(__file__).parent / "prompts" / "prompt_finance.txt"
             extra_info = ""
         else:
-            path = "prompts/prompt_eleve.txt"
+            path = Path(__file__).parent / "prompts" / "prompt_eleve.txt"
             extra_info = ""
 
         try:
@@ -91,12 +92,12 @@ class SQLAgent:
             messages = [{"role": "system", "content": prompt}]
             print("Clé OpenAI utilisée :", openai.api_key)
 
-            response = openai.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
-            )
+            response = self.openai_client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens
+        )
             sql = self._extract_sql(response.choices[0].message.content)
             if not self._validate_sql(sql):
                 raise ValueError("Validation SQL échouée")
@@ -134,7 +135,28 @@ class SQLAgent:
                 raise ValueError(f"Table inconnue: {table}")
         return True
     
-
+    def execute_query(self, sql, params=None):
+        """Exécute une requête SQL avec gestion d'erreur améliorée"""
+        try:
+            conn = self.db
+            cursor = conn.cursor(dictionary=True)  # ✅ Force le retour en dictionnaire
+            cursor.execute(sql, params or ())
+            
+            # ✅ Gestion correcte des résultats
+            if sql.strip().upper().startswith('SELECT'):
+                result = cursor.fetchall()
+                # Convertir les Decimal et autres types non sérialisables
+                result = self._serialize_data(result)
+                return {'success': True, 'data': result}
+            else:
+                conn.commit()
+                return {'success': True, 'affected_rows': cursor.rowcount}
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur SQL: {e}")
+            return {'success': False, 'error': str(e)}
+        finally:
+            cursor.close()
 
     def execute_natural_query(self, natural_query):
         try:

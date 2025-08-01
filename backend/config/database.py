@@ -102,11 +102,70 @@ def get_db():
 #     except Exception as e:
 #         logger.error(f"❌ Erreur connexion LangChain: {e}")
 #         return None
+
+# def get_db_connection():
+#     """Retourne une instance SQLDatabase personnalisée (pour l'assistant)"""
+#     try:
+#         db_user = os.getenv('MYSQL_USER')
+#         db_password = quote_plus(os.getenv('MYSQL_PASSWORD'))
+#         db_host = os.getenv('MYSQL_HOST')
+#         db_name = os.getenv('MYSQL_DATABASE')
+
+#         if not all([db_user, db_password, db_host, db_name]):
+#             raise ValueError("Variables de connexion DB manquantes")
+
+#         db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+#         db = ExtendedSQLDatabase.from_uri(db_uri)
+
+#         # Test de connexion
+#         db.run("SELECT 1")
+#         logger.info("✅ Connexion LangChain SQLDatabase établie")
+#         return db
+
+#     except Exception as e:
+#         logger.error(f"❌ Erreur connexion LangChain: {e}")
+#         return None
+
+
+# def get_db_connection():
+#     """Retourne une instance SQLDatabase personnalisée (pour l'assistant)"""
+#     try:
+#         db_user = os.getenv('MYSQL_USER')
+#         db_password = os.getenv('MYSQL_PASSWORD')  # Remove quote_plus
+#         db_host = os.getenv('MYSQL_HOST')
+#         db_name = os.getenv('MYSQL_DATABASE')
+
+#         if not all([db_user, db_password, db_host, db_name]):
+#             logger.error("Missing database connection variables")
+#             raise ValueError("Variables de connexion DB manquantes")
+
+#         # Use standard MySQL connector if LangChain fails
+#         try:
+#             import pymysql
+#             conn = pymysql.connect(
+#                 host=db_host,
+#                 user=db_user,
+#                 password=db_password,
+#                 database=db_name
+#             )
+#             return conn
+#         except ImportError:
+#             logger.warning("PyMySQL not available, trying SQLDatabase")
+            
+#         db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+#         db = ExtendedSQLDatabase.from_uri(db_uri)
+#         db.run("SELECT 1")
+#         logger.info("✅ Connexion LangChain SQLDatabase établie")
+#         return db
+
+#     except Exception as e:
+#         logger.error(f"❌ Erreur connexion DB: {e}")
+#         raise RuntimeError(f"Database connection failed: {str(e)}")
+
 def get_db_connection():
-    """Retourne une instance SQLDatabase personnalisée (pour l'assistant)"""
     try:
         db_user = os.getenv('MYSQL_USER')
-        db_password = quote_plus(os.getenv('MYSQL_PASSWORD'))
+        db_password = os.getenv('MYSQL_PASSWORD')
         db_host = os.getenv('MYSQL_HOST')
         db_name = os.getenv('MYSQL_DATABASE')
 
@@ -115,24 +174,64 @@ def get_db_connection():
 
         db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
         db = ExtendedSQLDatabase.from_uri(db_uri)
-
-        # Test de connexion
         db.run("SELECT 1")
         logger.info("✅ Connexion LangChain SQLDatabase établie")
         return db
 
     except Exception as e:
-        logger.error(f"❌ Erreur connexion LangChain: {e}")
-        return None
-
+        logger.error(f"❌ Erreur connexion DB: {e}")
+        raise RuntimeError(f"Database connection failed: {str(e)}")
 
 class ExtendedSQLDatabase(SQLDatabase):
     def get_schema(self):
         try:
-            return self.run("SHOW TABLES")
+            result = self.run("SHOW TABLES")
+            # Convertir le résultat en liste de noms de tables
+            if isinstance(result, str):
+                # Si c'est une chaîne, extraire les noms de tables
+                tables = [line.strip() for line in result.split('\n') if line.strip()]
+                return tables
+            return result
         except Exception as e:
             logger.error(f"Erreur get_schema : {e}")
-            return {}
+            return []
+
+    # AJOUTEZ CETTE MÉTHODE MANQUANTE
+    def get_foreign_key_relations(self):
+        """Récupère les relations de clés étrangères"""
+        try:
+            query = """
+            SELECT 
+                TABLE_NAME,
+                COLUMN_NAME,
+                CONSTRAINT_NAME,
+                REFERENCED_TABLE_NAME,
+                REFERENCED_COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE REFERENCED_TABLE_SCHEMA = DATABASE()
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+            """
+            result = self.run(query)
+            
+            # Analyser le résultat et le convertir en format attendu
+            relations = []
+            if isinstance(result, str):
+                lines = result.strip().split('\n')
+                for line in lines[1:]:  # Skip header
+                    parts = line.split('\t') if '\t' in line else line.split('|')
+                    if len(parts) >= 5:
+                        relations.append({
+                            'TABLE_NAME': parts[0].strip(),
+                            'COLUMN_NAME': parts[1].strip(),
+                            'CONSTRAINT_NAME': parts[2].strip(),
+                            'REFERENCED_TABLE_NAME': parts[3].strip(),
+                            'REFERENCED_COLUMN_NAME': parts[4].strip()
+                        })
+            
+            return relations
+        except Exception as e:
+            logger.error(f"Erreur get_foreign_key_relations : {e}")
+            return []
 
     def get_simplified_relations_text(self):
         try:
@@ -153,3 +252,19 @@ class ExtendedSQLDatabase(SQLDatabase):
         except Exception as e:
             logger.error(f"Erreur get_simplified_relations_text : {e}")
             return ""
+
+    # AJOUTEZ CETTE MÉTHODE POUR EXÉCUTER LES REQUÊTES
+    def execute_query(self, sql, params=None):
+        """Exécute une requête SQL et retourne le résultat formaté"""
+        try:
+            if params:
+                # LangChain SQLDatabase ne supporte pas les paramètres de cette façon
+                # On doit faire l'échappement manuellement (attention à la sécurité)
+                result = self.run(sql)
+            else:
+                result = self.run(sql)
+            
+            return {'success': True, 'data': result}
+        except Exception as e:
+            logger.error(f"❌ Erreur SQL execute_query: {e}")
+            return {'success': False, 'error': str(e)}

@@ -5,12 +5,14 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_req
 import logging
 import traceback
 from config.database import init_db, get_db, get_db_connection
+import os
 
 agent_bp = Blueprint('agent_bp', __name__)
 logger = logging.getLogger(__name__)
 
 # Initialisation assistant avec gestion d'erreurs
 assistant = None
+# agent.py - Corrections pour l'initialisation
 
 def initialize_assistant():
     """Initialise l'assistant avec gestion d'erreurs"""
@@ -18,8 +20,23 @@ def initialize_assistant():
     try:
         from agent.assistant import SQLAssistant
         
-        # Tentative d'initialisation
-        assistant = SQLAssistant()
+        # 4. PROBLÈME : Utiliser get_db_connection() au lieu de get_db_connection()
+        db = get_db_connection()
+        if not db:
+            print("❌ Database connection failed")
+            return False
+            
+        # Initialisation avec la DB
+        assistant = SQLAssistant(db)
+        
+        # 5. PROBLÈME : Test de la connexion DB
+        try:
+            # Tester la connexion avec une requête simple
+            test_result = db.run("SELECT 1 as test")
+            print(f"✅ Test DB réussi: {test_result}")
+        except Exception as test_error:
+            print(f"❌ Test DB échoué: {test_error}")
+            return False
         
         if assistant and assistant.db:
             print("✅ Assistant initialisé avec succès")
@@ -28,14 +45,15 @@ def initialize_assistant():
             print("❌ Assistant initialisé mais DB manquante")
             return False
             
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        traceback.print_exc()
+        return False
     except Exception as e:
         print(f"❌ Erreur initialisation assistant: {e}")
+        traceback.print_exc()
         assistant = None
         return False
-
-# Initialisation au chargement du module
-initialize_assistant()
-
 @agent_bp.route('/ask', methods=['POST'])
 def ask_sql():
     """Endpoint principal avec gestion d'erreurs robuste"""
@@ -88,11 +106,19 @@ def ask_sql():
         
         # Traitement de la question
         try:
-            sql_query, response = assistant.ask_question(question)
+            # sql_query, response = assistant.ask_question(question)
             
+            # result = {
+            #     "sql_query": sql_query,
+            #     "response": response,
+            #     "status": "success",
+            #     "question": question
+            # }
+            response_data = assistant.get_response(question)
+
             result = {
-                "sql_query": sql_query,
-                "response": response,
+                "response": response_data.get("response"),
+                "sql_query": response_data.get("sql_query"),
                 "status": "success",
                 "question": question
             }
@@ -156,3 +182,29 @@ def reinitialize():
             "success": False,
             "error": str(e)
         }), 500
+        
+@agent_bp.route('/test', methods=['GET'])
+def test_simple():
+    """Simple test endpoint"""
+    return jsonify({
+        "message": "Agent backend is working",
+        "assistant_ready": assistant is not None,
+        "timestamp": "2024-01-01T00:00:00Z"
+    })
+    
+    
+@agent_bp.route('/debug', methods=['GET'])
+def debug():
+    try:
+        from agent.assistant import SQLAssistant
+        db = get_db_connection()
+        return jsonify({
+            "db_connection": "OK" if db else "FAILED",
+            "SQLAssistant_import": "OK",
+            "env_vars": {
+                "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+                "DB_CONNECTION": bool(os.getenv("DB_HOST"))
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
