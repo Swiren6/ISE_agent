@@ -1,0 +1,10 @@
+{
+  "75e23a24b842d1d0e1e01ab61d17c63a": {
+    "question_template": "donne moi les note de ma fille pour la {codeperiexam}",
+    "sql_template": "SELECT em.libematifr AS matiere, ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre \nFROM Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e \nWHERE e.idedusrv = ed.idenelev \nAND ed.codemati = em.codemati \nAND ex.codeperiexam = ed.codeperiexam \nAND e.Idpersonne IN (7818) \nAND ed.moyemati NOT LIKE '0.00' \nAND ed.codeperiexam = {codeperiexam};"
+  },
+  "7d5baf24f70ed5aae78ab2e244663f8e": {
+    "question_template": "donne moi les moyennes par matières de l'eleve d'id {IDPersonne} pour la {codeperiexam}",
+    "sql_template": "SELECT em.libematifr AS matiere, ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre \nFROM Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e \nWHERE e.idedusrv = ed.idenelev \nAND ed.codemati = em.codemati \nAND ex.codeperiexam = ed.codeperiexam  \nAND e.Idpersonne IN ({IDPersonne}) \nAND ed.moyemati NOT LIKE '0.00' \nAND ed.codeperiexam = {codeperiexam};"
+  }
+}
