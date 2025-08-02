@@ -57,8 +57,3 @@ JOIN niveau n ON c.IDNIV = n.id
 WHERE i.annuler = 0
 GROUP BY n.NOMNIVFR, i.TypeInscri
 ORDER BY n.NOMNIVFR, i.TypeInscri;
-
-
-
-
-

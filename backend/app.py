@@ -5,7 +5,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 from dotenv import load_dotenv
-
+from config.database import get_db
 # Chargement des variables d'environnement
 load_dotenv()
 
@@ -14,6 +14,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logging.basicConfig(level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 # Validation de la configuration
@@ -91,8 +93,19 @@ def create_app():
     app.register_blueprint(notifications_bp, url_prefix='/api')
 
     
-    
-    # Route de santé avec test DB
+    @app.route('/api/test-mysql')
+    def test_mysql():
+        try:
+            conn = get_db()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT 1 as test, NOW() as time")
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            return {"status": "OK", "result": result}
+        except Exception as e:
+            return {"error": str(e)}, 500
+        # Route de santé avec test DB
     @app.route('/api/health')
     def health():
         try:
