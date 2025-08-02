@@ -31,6 +31,7 @@ ATTENTION:
 **les table eleve et parent ne contienne pas les noms et les prenoms . ils se trouvent dans la table personne.
 **les table eleve et parent ne contienne pas les numéro de telephnone Tel1 et Tel2 . ils se trouvent dans la table personne.
 **les colonnes principale  du table personne sont : id, NomFr, PrenomFr, NomAr , PrenomAr, Cin,AdresseFr, AdresseAr, Tel1, Tel2,Nationalite,Localite,Civilite.
+**lorsque on demande l'emploi du temps d'un classe précie avec un jour précie on extrait le nom , le prénom de l'enseignant ,le nom de la matière , le nom de la salle , le debut et la fin de séance et le libelle de groupe (par classe...)
 **la trimestre 3 est d id 33, trimestre 2 est d id 32 , trimestre 1 est d id 31.
 
 **CORRECTION IMPORTANTE POUR LES ABSENCES:**
@@ -53,10 +54,8 @@ id_inscription IN (
     END AS statut_paiement.
 **lorsque on veut savoir le paiement extra d un eleve on extrait le motif_paiement, le totalTTC  et le reste en faisant  la jointure entre le paiementextra et paiementextradetails d'une coté et paiementextra et paiementmotif d'une autre coté .
 **lorsque on demande les détails de paiement scolaire on extrait le mode de reglement ,numéro de chèque , montant et la date de l'opération. 
-**lorsque on demande l'mploi du temps d'un classe précie avec un jour précie on extrait le nom , le prénom de l'enseignant ,le nom de la matière , le nom de la salle , le debut et la fin de séance et le libelle de groupe (par classe...)
 **Les coordonées de debut et de la fin de séance se trouve dans le table emploidutemps sous forme d'id ,les covertir en heures a l'aide de table seance . 
 **la semaine A est d'id 2 , la semaine B est d'id 3 , Sans semaine d'id 1.
-**les colonnes principale  du table personne sont : id, NomFr, PrenomFr, NomAr , PrenomAr, Cin,AdresseFr, AdresseAr, Tel1, Tel2,Nationalite,Localite,Civilite.
 **pour les nom de jour en français on a une colone libelleJourFr avec mercredi c est ecrite Mercredi . 
 **utiliser des JOINs explicites . exemple au lieu de :WHERE
     e.Classe = (SELECT id FROM classe WHERE CODECLASSEFR = '7B2')
@@ -73,6 +72,13 @@ JOIN
 **la décision d'acceptation consernent seulement les nouveaux eleves inscrits a l'ecole.
 **pour les cheques a echeance non valides consulter la table reglementeleve_echeancier .
 **les cheques echancier non valide le champ isvalide=0.
+**pour les CODECLASSEFR on met la classe entre guemets . exemple :CODECLASSEFR = '8B2'
+** lorsque on demande le nombre d'abscences par matière on donne le nom de la matière non pas son id .
+**lorsqu'on demande les moyennes par matières pour une trimestre précise voici la requette qu on applique :
+SELECT em.libematifr AS matiere ,ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre FROM
+           Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e
+           WHERE e.idedusrv=ed.idenelev and ed.codemati=em.codemati and
+           ex.codeperiexam=ed.codeperiexam  and  e.Idpersonne=(id_de la personne) and ed.moyemati not like '0.00' and ed.codeperiexam = ( id de la trimestre  ;
 
 Voici la structure détaillée des tables pertinentes pour votre tâche (nom des tables, colonnes et leurs types) :
 {{table_info}}
