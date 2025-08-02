@@ -25,6 +25,10 @@ if missing_vars:
     logger.error(f"❌ Variables manquantes: {missing_vars}")
     exit(1)
 
+<<<<<<< HEAD
+    
+jwt_secret = os.getenv('JWT_SECRET_KEY')
+=======
 # ✅ Affichage de la configuration (masquer le mot de passe)
 logger.info(f"🔧 Configuration DB:")
 logger.info(f"   Host: {os.getenv('MYSQL_HOST')}")
@@ -32,12 +36,14 @@ logger.info(f"   User: {os.getenv('MYSQL_USER')}")
 logger.info(f"   Database: {os.getenv('MYSQL_DATABASE')}")
 logger.info(f"   Password: {'*' * len(os.getenv('MYSQL_PASSWORD', ''))}")
 
+>>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
 def create_app():
     """Factory pour créer l'application Flask"""
     app = Flask(__name__)
     
     # 🔧 Configuration JWT - CRITIQUE
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-2025')
+    #app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-2025')
+    app.config['JWT_SECRET_KEY'] = jwt_secret
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'

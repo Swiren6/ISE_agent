@@ -65,9 +65,7 @@ class ApiService {
     }
   }
 
-  /// Envoi d'une question au chat
-  // Dans votre api_service.dart, modifiez la méthode askQuestion pour débugger
-
+   
   Future<Map<String, dynamic>> askQuestion(
       String question, String token) async {
     final endpoint = '/ask';
@@ -82,9 +80,8 @@ class ApiService {
 
       final uri = Uri.parse('$baseUrl$endpoint');
 
-      // 🔍 DEBUG: Headers exactement comme Postman
       final headers = {
-        'Content-Type': 'application/json', // ← Simplifié (pas de charset)
+        'Content-Type': 'application/json', 
         'Accept': 'application/json',
         if (token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
@@ -92,15 +89,6 @@ class ApiService {
       // 🔍 DEBUG: Body exactement comme Postman
       final bodyMap = {'question': trimmedQuestion};
       final body = jsonEncode(bodyMap);
-
-      // // 🔍 LOGS DE DEBUG DÉTAILLÉS
-      // print('🔍 === DEBUG FLUTTER → FLASK ===');
-      // print('📤 URI: $uri');
-      // print('📤 Headers: $headers');
-      // print('📤 Body Map: $bodyMap');
-      // print('📤 Body JSON: $body');
-      // print('📤 Body Length: ${body.length}');
-      // print('📤 Body Bytes: ${utf8.encode(body)}');
 
       // Test: encoder manuellement comme Postman
       final alternativeBody = '{"question":"$trimmedQuestion"}';
@@ -126,6 +114,7 @@ class ApiService {
       throw ApiException('Erreur lors de l\'envoi de la question');
     }
   }
+
 
   Map<String, dynamic> _handleResponse(http.Response response) {
     final statusCode = response.statusCode;

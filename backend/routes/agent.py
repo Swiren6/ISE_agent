@@ -12,48 +12,47 @@ logger = logging.getLogger(__name__)
 
 # Initialisation assistant avec gestion d'erreurs
 assistant = None
-# def initialize_assistant():
-#     global assistant
-#     try:
-#         from agent.assistant import SQLAssistant
-#         from langchain_community.utilities import SQLDatabase
-        
-#         # Utiliser SQLDatabase de langchain
-#         db_uri = f"mysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}/{os.getenv('MYSQL_DATABASE')}"
-#         db = SQLDatabase.from_uri(db_uri)
-        
-#         assistant = SQLAssistant(db)
-#         print("✅ Assistant initialisé avec succès")
-#         return True
-        
-#     except Exception as e:
-#         print(f"❌ Erreur initialisation: {e}")
-#         return False
+# agent.py - Corrections pour l'initialisation
 
 def initialize_assistant():
+    """Initialise l'assistant avec gestion d'erreurs"""
     global assistant
     try:
         from agent.assistant import SQLAssistant
-        from langchain_community.utilities import SQLDatabase
-        assistant = SQLAssistant() 
-        required_vars = ['MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_HOST', 'MYSQL_DATABASE', 'TOGETHER_API_KEY']
-        missing = [var for var in required_vars if not os.getenv(var)]
         
-        if missing:
-            print(f"❌ Variables manquantes: {missing}")
+        # 4. PROBLÈME : Utiliser get_db_connection() au lieu de get_db_connection()
+        db = get_db_connection()
+        if not db:
+            print("❌ Database connection failed")
+            return False
+            
+        # Initialisation avec la DB
+        assistant = SQLAssistant(db)
+        
+        # 5. PROBLÈME : Test de la connexion DB
+        try:
+            # Tester la connexion avec une requête simple
+            test_result = db.run("SELECT 1 as test")
+            print(f"✅ Test DB réussi: {test_result}")
+        except Exception as test_error:
+            print(f"❌ Test DB échoué: {test_error}")
             return False
         
-        # Utiliser SQLDatabase de langchain
-        db_uri = f"mysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}/{os.getenv('MYSQL_DATABASE')}"
-        db = SQLDatabase.from_uri(db_uri)
-        
-        assistant = SQLAssistant(db)
-        print("✅ Assistant initialisé avec succès")
-        return True
-        
+        if assistant and assistant.db:
+            print("✅ Assistant initialisé avec succès")
+            return True
+        else:
+            print("❌ Assistant initialisé mais DB manquante")
+            return False
+            
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        traceback.print_exc()
+        return False
     except Exception as e:
-        print(f"❌ Erreur initialisation: {e}")
-        traceback.print_exc()  # ✅ AJOUT pour debug
+        print(f"❌ Erreur initialisation assistant: {e}")
+        traceback.print_exc()
+        assistant = None
         return False
 @agent_bp.route('/ask', methods=['POST'])
 def ask_sql():
