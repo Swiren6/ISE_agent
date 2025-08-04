@@ -5,9 +5,12 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 from dotenv import load_dotenv
+from config.database import get_db
 
+
+from routes.agent import agent_bp
 # Chargement des variables d'environnement
-load_dotenv()
+load_dotenv(dotenv_path=r"C:/Users/rania/OneDrive/Bureau/ISE_agent/backend/.env")
 
 # Configuration logging plus détaillée
 logging.basicConfig(
@@ -58,12 +61,12 @@ def create_app():
     
     # Configuration CORS
     CORS(app, resources={
-        r"/api/*": {
-            "origins": ["*"],
-            "methods": ["GET", "POST", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    })
+            r"/api/*": {
+                "origins": ["http://localhost:*", "http://127.0.0.1:*"], 
+                "methods": ["GET", "POST"],
+                "allow_headers": ["*"]
+            }
+        })
     
     # ✅ Initialisation base de données avec test
     logger.info("🔄 Initialisation de la base de données...")
@@ -81,11 +84,39 @@ def create_app():
     from routes.notifications import notifications_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api')
-    app.register_blueprint(agent_bp, url_prefix='/api')
-    app.register_blueprint(notifications_bp, url_prefix='/api')
+    app.register_blueprint(agent_bp,url_prefix='/api')
+
 
     
-    
+    @app.route('/api/notifications', methods=['GET'])
+    def check_exam_notifications():
+        conn = get_db()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT * FROM notification_queue WHERE seen = 0")
+            notifications_non_vues = cursor.fetchall()
+
+            messages = [{"id": notif["id"], "message": notif["message"]} for notif in notifications_non_vues]
+
+
+            if notifications_non_vues:
+                ids = [str(notif['id']) for notif in notifications_non_vues]
+                format_strings = ",".join(["%s"] * len(ids))
+                update_query = f"UPDATE notification_queue SET seen = 1 WHERE id IN ({format_strings})"
+                cursor.execute(update_query, ids)
+                conn.commit()
+
+            return jsonify(messages)
+
+        except Exception as e:
+            conn.rollback()
+            return jsonify({"error": str(e)}), 500
+
+        finally:
+            cursor.close()
+            # Ne PAS fermer conn ici
+
     # Route de santé avec test DB
     @app.route('/api/health')
     def health():
@@ -127,9 +158,7 @@ def create_app():
         except Exception as e:
             logger.error(f"❌ DB test failed: {e}")
             return {"error": str(e)}, 500
-    
-    return app
-
+    return app 
 def main():
     """Point d'entrée principal"""
     # Création de l'application

@@ -1,24 +1,18 @@
-
-
 {
-  "8eb4c39c88a0aa64eeff694f3976ff92": {
-    "question_template": "nombre élèves",
+  "fc54e0ace1b2fce78174740277de6bdc": {
+    "question_template": "Combien d'élèves?",
     "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve;"
   },
-  "945cd20e9f90098ec228e59a6149ecea": {
-    "question_template": "donne moi les coordonées de l'eleve {NomFr} {PrenomFr}",
-    "sql_template": "SELECT p.NomFr, p.PrenomFr, p.NomAr, p.PrenomAr, p.Cin, p.AdresseFr, p.AdresseAr, p.Tel1, p.Tel2, p.Nationalite, p.Localite, p.Civilite\nFROM personne p\nJOIN eleve e ON p.id = e.IdPersonne\nWHERE CONCAT(p.NomFr, ' ', p.PrenomFr) = '{NomFr} {PrenomFr}' OR CONCAT(p.NomAr, ' ', p.PrenomAr) = '{NomFr} {PrenomFr}';"
+  "0650a72f585e49346cc420beacc14181": {
+    "question_template": "Combien d'élèves",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve;"
   },
-  "08b9e1da4e51f143a4ff6f37b29e3ddb": {
-    "question_template": "donne moi les retards effectué par l eleve {NomFr} {PrenomFr}",
-    "sql_template": "SELECT r.id, r.Date, r.Heure, r.Duree, m.NomMatiereFr AS Matiere, \n       CONCAT(p.NomFr, ' ', p.PrenomFr) AS Enseignant, r.Vu\nFROM retard r\nJOIN inscriptioneleve ie ON r.Inscription = ie.id\nJOIN eleve e ON ie.Eleve = e.id\nJOIN personne p_eleve ON e.IdPersonne = p_eleve.id\nJOIN matiere m ON r.Matiere = m.id\nJOIN enseingant ens ON r.Enseignant = ens.id\nJOIN personne p ON ens.idPersonne = p.id\nWHERE CONCAT(p_eleve.NomFr, ' ', p_eleve.PrenomFr) = '{NomFr} {PrenomFr}'\nORDER BY r.Date DESC;"
+  "3073eb88aae6ba77dbb1ea2621b558ee": {
+    "question_template": "Nombre des élèves par délégation",
+    "sql_template": "SELECT \n    l.IDLOCALITE AS id,\n    l.LIBELLELOCALITEFR AS Localite,\n    COUNT(*) AS Nbr,\n    i.AnneeScolaire AS AnneeScolaire\nFROM \n    personne p\nJOIN \n    localite l ON p.Localite = l.IDLOCALITE\nJOIN \n    inscriptioneleve i ON i.Personne = p.id\nWHERE \n    i.AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '1')\n    AND i.Annuler = 0\nGROUP BY \n    l.IDLOCALITE, l.LIBELLELOCALITEFR, i.AnneeScolaire\n\nUNION ALL\n\nSELECT \n    NULL AS id,\n    'Pas de localite' AS Localite,\n    COUNT(*) AS Nbr,\n    i.AnneeScolaire AS AnneeScolaire\nFROM \n    inscriptioneleve i\nJOIN \n    personne p ON i.Personne = p.id\nWHERE \n    i.AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '1')\n    AND p.Localite IS NULL\nGROUP BY \n    i.AnneeScolaire\n\nORDER BY \n    Nbr DESC;"
   },
-  "270603fff1a5aeefe5b23cb0b88c6c18": {
-    "question_template": "donne moi le nombre des classes",
-    "sql_template": "SELECT COUNT(*) AS nombre_classes FROM classe;"
-  },
-  "1f5572e59e5cf5838f218b36446a676e": {
-    "question_template": "donne moi le nombre des eleves inscrits pendant {AnneeScolaire}",
-    "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscrits\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
-  },
-
+  "3794002b375328092e6d83438b6c4a6f": {
+    "question_template": "génère l'attestaion de Zeineb SASSI",
+    "sql_template": "SELECT p.NomFr, p.PrenomFr, e.id AS id_eleve, i.AnneeScolaire, i.Classe\nFROM personne p\nJOIN eleve e ON p.id = e.IdPersonne\nJOIN inscriptioneleve i ON e.id = i.Eleve\nWHERE p.NomFr = 'SASSI' AND p.PrenomFr = 'Zeineb';"
+  }
+}
