@@ -10,9 +10,8 @@ import re
 from pathlib import Path
 from agent.cache_manager import CacheManager
 from agent.cache_manager1 import CacheManager1
-from services.auth_service import AuthService
 import logging
-from config.database import get_db 
+from config.database import get_db
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -131,6 +130,8 @@ ATTENTION:
 **les colonnes principale  du table personne sont : id, NomFr, PrenomFr, NomAr , PrenomAr, Cin,AdresseFr, AdresseAr, Tel1, Tel2,Nationalite,Localite,Civilite.
 **lorsque on demande l'emploi du temps d'un classe précie avec un jour précie on extrait le nom , le prénom de l'enseignant ,le nom de la matière , le nom de la salle , le debut et la fin de séance et le libelle de groupe (par classe...)
 **la trimestre 3 est d id 33, trimestre 2 est d id 32 , trimestre 1 est d id 31.
+** le table des enseignants s'appelle enseingant non pas enseignant. 
+** le parametre du nom de la salle c'est nomSalleFr non NomSalle . 
 **lorsque on veut avoir l id d un eleve  on fait cette jointure : 
 id_inscription IN (
         SELECT id
@@ -155,6 +156,7 @@ id_inscription IN (
 JOIN
      classe c ON e.Classe = c.id AND c.CODECLASSEFR = '7B2'
 **les résultats des trimestres se trouve dans le table Eduresultatcopie .
+** le nom de matière dans la table edumatiere est libematifr non pas NomMatiereFr .
 **l id de l eleve est liée par l id de la personne par Idpersonne  
 **pour les CODECLASSEFR on met la classe entre guemets . exemple :CODECLASSEFR = '8B2'
 ** pour l'etat de paiement on n'a pas une colone qui s'appelle MontatTTC dans le table paiement et on donne seulement la tranche , le TotalTTC, le MontantRestant du tableau paiement.
@@ -265,14 +267,6 @@ class SQLAssistant:
             except Exception as close_error:
                 logger.warning(f"⚠️ Error during cleanup: {str(close_error)}")
 
-    def is_super_admin(self, roles: List[str]) -> bool:
-        """Vérifie si l'utilisateur est super admin"""
-        admin_roles = ['ROLE_SUPER_ADMIN']
-        return any(role.upper() in admin_roles for role in roles)
-
-    def is_parent(self, roles: List[str]) -> bool:
-        """Vérifie si l'utilisateur est un parent"""
-        return 'ROLE_PARENT' in [role.upper() for role in roles]
 
     def validate_parent_access(self, sql_query: str, children_ids: List[int]) -> bool:
         # Validation des inputs
@@ -392,7 +386,6 @@ class SQLAssistant:
     def ask_question(self, question: str, user_id: int, roles: List[str]) -> tuple[str, str]:
         """Version strictement authentifiée"""
 
-        
         # 1. Validation des rôles
         if not roles:
             return "", "❌ Accès refusé : Aucun rôle fourni"
@@ -473,7 +466,8 @@ class SQLAssistant:
     def _process_parent_question(self, question: str, user_id: int) -> tuple[str, str]:
         """Traite une question avec restrictions parent"""
         
-        cached = self.cache1.get_cached_query(question)
+        self.cache1.clean_double_braces_in_cache()
+        cached = self.cache1.get_cached_query(question,user_id)
         if cached:
             sql_template, variables = cached
             sql_query = sql_template
