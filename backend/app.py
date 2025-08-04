@@ -1,57 +1,37 @@
 import os
 import logging
-from flask import Flask, jsonify
+from flask import Flask,jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 from dotenv import load_dotenv
-from config.database import get_db
+
 # Chargement des variables d'environnement
 load_dotenv()
-
-# Configuration logging plus détaillée
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logging.basicConfig(level=logging.DEBUG)
-
-logger = logging.getLogger(__name__)
 
 # Validation de la configuration
 required_vars = ['MYSQL_HOST', 'MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE']
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
-    logger.error(f"❌ Variables manquantes: {missing_vars}")
+    print(f"❌ Variables manquantes: {missing_vars}")
     exit(1)
 
-<<<<<<< HEAD
-    
-jwt_secret = os.getenv('JWT_SECRET_KEY')
-=======
-# ✅ Affichage de la configuration (masquer le mot de passe)
-logger.info(f"🔧 Configuration DB:")
-logger.info(f"   Host: {os.getenv('MYSQL_HOST')}")
-logger.info(f"   User: {os.getenv('MYSQL_USER')}")
-logger.info(f"   Database: {os.getenv('MYSQL_DATABASE')}")
-logger.info(f"   Password: {'*' * len(os.getenv('MYSQL_PASSWORD', ''))}")
-
->>>>>>> 2f62f252ca35df8efbcc3aa92d70d941e87bb9d6
 def create_app():
     """Factory pour créer l'application Flask"""
     app = Flask(__name__)
-    
+    jwt = JWTManager(app)
     # 🔧 Configuration JWT - CRITIQUE
-    #app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-2025')
-    app.config['JWT_SECRET_KEY'] = jwt_secret
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
+    
+    # 🔧 AJOUT : Configuration JWT plus flexible
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
     
     jwt = JWTManager(app)
     
-    # 🔧 Gestion d'erreur JWT
+    # 🔧 AJOUT : Gestion d'erreur JWT
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
         return jsonify({"error": "Token expired"}), 401
@@ -73,97 +53,40 @@ def create_app():
         }
     })
     
-    # ✅ Initialisation base de données avec test
-    logger.info("🔄 Initialisation de la base de données...")
-    try:
-        from config.database import init_db
-        db = init_db(app)
-        logger.info("✅ Base de données initialisée avec succès")
-    except Exception as e:
-        logger.error(f"❌ Erreur initialisation DB: {e}")
-        raise
+    # Initialisation base de données
+    from config.database import init_db
+    init_db(app)
     
     # Enregistrement des routes
     from routes.auth import auth_bp
     from routes.agent import agent_bp
-    from routes.notifications import notifications_bp
-
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(agent_bp, url_prefix='/api')
-    app.register_blueprint(notifications_bp, url_prefix='/api')
-
     
-    @app.route('/api/test-mysql')
-    def test_mysql():
-        try:
-            conn = get_db()
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT 1 as test, NOW() as time")
-            result = cursor.fetchone()
-            cursor.close()
-            conn.close()
-            return {"status": "OK", "result": result}
-        except Exception as e:
-            return {"error": str(e)}, 500
-        # Route de santé avec test DB
+    # Route de santé
     @app.route('/api/health')
     def health():
-        try:
-            from config.database import get_db
-            conn = get_db()
-            if conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT 1 as test")
-                result = cursor.fetchone()
-                cursor.close()
-                if hasattr(conn, '_direct_connection'):
-                    conn.close()
-                return {"status": "OK", "database": "Connected", "test": result}
-            else:
-                return {"status": "OK", "database": "Disconnected"}, 503
-        except Exception as e:
-            logger.error(f"❌ Health check failed: {e}")
-            return {"status": "ERROR", "database": str(e)}, 503
-    
-    # ✅ Route de test d'authentification
-    @app.route('/api/test-db')
-    def test_db():
-        try:
-            from config.database import get_db
-            conn = get_db()
-            if not conn:
-                return {"error": "No database connection"}, 500
-                
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as count FROM user")
-            result = cursor.fetchone()
-            cursor.close()
-            
-            if hasattr(conn, '_direct_connection'):
-                conn.close()
-                
-            return {"status": "OK", "user_count": result['count']}
-        except Exception as e:
-            logger.error(f"❌ DB test failed: {e}")
-            return {"error": str(e)}, 500
+        return {"status": "OK"}
     
     return app
 
 def main():
     """Point d'entrée principal"""
+    # Configuration logging
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    
     # Création de l'application
     app = create_app()
     
-    logger.info("🚀 Assistant Scolaire - Backend démarré")
-    logger.info(f"📍 URL: http://localhost:5001")
-    logger.info(f"🏥 Health: http://localhost:5001/api/health")
-    logger.info(f"🧪 Test DB: http://localhost:5001/api/test-db")
+    print("🚀 Assistant Scolaire - Backend démarré")
+    print(f"📍 URL: http://localhost:5000")
+    print(f"🏥 Health: http://localhost:5000/api/health")
     
     # Démarrage du serveur
     try:
-        app.run(host='0.0.0.0', port=5001, debug=True)
+        app.run(host='0.0.0.0', port=5000, debug=True)
     except KeyboardInterrupt:
-        logger.info("👋 Serveur arrêté")
+        print("👋 Serveur arrêté")
 
 if __name__ == "__main__":
     main()

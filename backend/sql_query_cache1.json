@@ -1,0 +1,10 @@
+{
+  "3f0f8ead9a0598c0682f40ffa5600878": {
+    "question_template": "donne moi les notes de {family_relation} pour la {codeperiexam}",
+    "sql_template": "SELECT em.libematifr AS matiere, ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre \nFROM Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e \nWHERE e.idedusrv = ed.idenelev \nAND ed.codemati = em.codemati \nAND ex.codeperiexam = ed.codeperiexam \nAND e.Idpersonne IN ({id_personne}) \nAND ed.moyemati NOT LIKE '0.00' \nAND ed.codeperiexam = {codeperiexam};"
+  },
+  "c2f4131c1b9632d76505b9fce9b7b158": {
+    "question_template": "donne moi les coordonnées de {family_relation}",
+    "sql_template": "SELECT p.NomFr, p.PrenomFr, p.Tel1, p.Tel2, p.AdresseFr\nFROM personne p\nJOIN eleve e ON p.id = e.IdPersonne\nWHERE e.IdPersonne IN ({id_personne});"
+  }
+}

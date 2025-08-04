@@ -86,9 +86,19 @@ class ApiService {
         if (token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
+
       // 🔍 DEBUG: Body exactement comme Postman
       final bodyMap = {'question': trimmedQuestion};
       final body = jsonEncode(bodyMap);
+
+      // // 🔍 LOGS DE DEBUG DÉTAILLÉS
+      // print('🔍 === DEBUG FLUTTER → FLASK ===');
+      // print('📤 URI: $uri');
+      // print('📤 Headers: $headers');
+      // print('📤 Body Map: $bodyMap');
+      // print('📤 Body JSON: $body');
+      // print('📤 Body Length: ${body.length}');
+      // print('📤 Body Bytes: ${utf8.encode(body)}');
 
       // Test: encoder manuellement comme Postman
       final alternativeBody = '{"question":"$trimmedQuestion"}';
