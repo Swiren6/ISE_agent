@@ -14,5 +14,9 @@
   "3794002b375328092e6d83438b6c4a6f": {
     "question_template": "génère l'attestaion de Zeineb SASSI",
     "sql_template": "SELECT p.NomFr, p.PrenomFr, e.id AS id_eleve, i.AnneeScolaire, i.Classe\nFROM personne p\nJOIN eleve e ON p.id = e.IdPersonne\nJOIN inscriptioneleve i ON e.id = i.Eleve\nWHERE p.NomFr = 'SASSI' AND p.PrenomFr = 'Zeineb';"
+  },
+    "0000f5675d9fd65320e3f21935b590b9": {
+    "question_template": "donne moi le nombre des eleves inscris {AnneeScolaire}",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscrits\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
   }
 }

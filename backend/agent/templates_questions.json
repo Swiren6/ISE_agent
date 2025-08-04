@@ -1,13 +1,9 @@
-{
-  "questions": [
+{"questions": [
     {
-      "template_question": "nombre d'absences de l'élève {NomFr} {PrenomFr}",
-      "requete_template": "SELECT COUNT(*) FROM absence a JOIN inscriptioneleve ie ON a.Inscription = ie.id JOIN eleve e ON ie.Eleve = e.id JOIN personne p ON e.IdPersonne = p.id WHERE p.NomFr = '{NomFr}' AND p.PrenomFr = '{PrenomFr}';"
-    },
-    {
-    "template_question": "nombre d'absences de l'élève {NomFr} {PrenomFr}",
-    "requete_template": "SELECT COUNT(a.id) AS nombre_absences FROM absence a JOIN inscriptioneleve ie ON a.Inscription = ie.id JOIN eleve e ON ie.Eleve = e.id JOIN personne p ON e.IdPersonne = p.id WHERE p.NomFr = '{NomFr}' AND p.PrenomFr = '{PrenomFr}';"
-    
-}
-  ]
-}
+       "template_question": "donne moi l'etat de paiements pour l'élève d'id {IdPersonne} ?",
+       "requete_template": "SELECT p.id, p.`Tranche`, p.`TotalTTC`, p.`MontantRestant`, p.`Annuler` FROM paiement p WHERE p.`Inscription` IN (SELECT id FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne = {IdPersonne}));",
+       "variables": ["IdPersonne"],
+       "description": "Retourne les détails des paiements  pour un élève spécifique via son ID Personne."
+   }
+
+]}
