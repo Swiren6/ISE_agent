@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Any, Tuple
 from agent.llm_utils import ask_llm 
 from langchain.prompts import PromptTemplate
 import os
-import json
+from dotenv import load_dotenv  
 from agent.template_matcher.matcher import SemanticTemplateMatcher
 import re
 from pathlib import Path
@@ -16,7 +16,6 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-# Template pour les super admins (accès complet)
 ADMIN_PROMPT_TEMPLATE = PromptTemplate(
     input_variables=["input", "table_info", "relevant_domain_descriptions", "relations"],
     template=f"""
@@ -417,22 +416,8 @@ class SQLAssistant:
             sql_query = sql_template
             for column, value in variables.items():
                 sql_query = sql_query.replace(f"{{{column}}}", value)
+                
             
-            print("⚡ Requête admin récupérée depuis le cache")
-            try:
-                result = self.db.run(sql_query)
-                return sql_query, self.format_result(result, question)
-            except Exception as db_error:
-                return sql_query, f"❌ Erreur d'exécution SQL : {str(db_error)}"
-        
-        # 2. Vérifier les templates
-        template_match = self.find_matching_template(question)
-        if template_match:
-            print("🔍 Template admin trouvé")
-            sql_query = self.generate_query_from_template(
-                template_match["template"],
-                template_match["variables"]
-            )
             try:
                 result = self.db.run(sql_query)
                 formatted_result = self.format_result(result, question)
@@ -523,251 +508,147 @@ class SQLAssistant:
         try:
             templates_path = Path(__file__).parent / 'templates_questions.json'
             
-            if not templates_path.exists():
-                print(f"⚠️ Fichier non trouvé, création: {templates_path}")
-                templates_path.write_text('{"questions": []}', encoding='utf-8')
-                return []
+            # Si c'est un résultat simple (nombre, etc.)
+            lines = result_str.strip().split('\n')
+            if len(lines) == 1:
+                return f"Résultat : {lines[0]}"
+            
+            # Si c'est un tableau de résultats
+            output = [f"**{question}**"] if question else []
+            output.extend(lines)
 
-            content = templates_path.read_text(encoding='utf-8').strip()
-            if not content:
-                print("⚠️ Fichier vide, réinitialisation")
-                templates_path.write_text('{"questions": []}', encoding='utf-8')
-                return []
+            return "\n".join(output)        
+
+        def get_tables_from_domains(self, domains: List[str], domain_to_tables_map: Dict[str, List[str]]) -> List[str]:
+            """Retrieves all tables associated with the given domains."""
+            tables = []
+            for domain in domains:
+                tables.extend(domain_to_tables_map.get(domain, []))
+
+            return sorted(list(set(tables)))                
+
+        def format_result(self, result: str, question: str = "") -> str:
+            """
+            Formate les résultats SQL bruts en une table lisible
+            Args:
+                result: Le résultat brut de la requête SQL
+                question: La question originale (optionnelle)
+            Returns:
+                str: Le résultat formaté ou un message approprié
+            """
+            if not result or result.strip() in ["[]", ""] or "0 rows" in result.lower():
+                return "✅ Requête exécutée mais aucun résultat trouvé."
 
             try:
+                lines = [line.strip() for line in result.split('\n') if line.strip()]
+                if len(lines) == 1 and lines[0].startswith('(') and lines[0].endswith(')'):
+                    value = lines[0][1:-1].strip()  
+                    return f"Résultat : {value}"
+
+                if len(lines) > 1:
+                    headers = [h.strip() for h in lines[0].split('|')]
+                    rows = []
+
+                    for line in lines[1:]:
+                        row = [cell.strip() for cell in line.split('|')]
+                        rows.append(row)
+
+                    formatted = []
+                    if question:
+                        formatted.append(f"Résultats pour: {question}\n")
+
+                    # En-tête
+                    header_line = " | ".join(headers)
+                    formatted.append(header_line)
+
+                    # Séparateur
+                    separator = "-+-".join(['-' * len(h) for h in headers])
+                    formatted.append(separator)
+
+                    # Données
+                    for row in rows:
+                        formatted.append(" | ".join(row))
+
+                    return "\n".join(formatted)
+
+                return f"{result}"
+
+            except Exception as e:
+                return f"❌ Erreur de formatage: {str(e)}\nRésultat brut:\n{result}"
+
+        def _safe_load_relations(self) -> str:
+            """Charge les relations avec gestion d'erreurs"""
+            try:
+                relations_path = Path(__file__).parent / 'prompts' / 'relations.txt'  
+                print(f"🔍 Tentative de chargement depuis : {relations_path.absolute()}")# Log du chemin
+
+                          
+                if relations_path.exists():
+                    content = relations_path.read_text(encoding='utf-8')
+                    print(f"✅ Contenu chargé (premières 50 lignes) :\n{content[:500]}...")  # Aperçu du contenu
+                    return content
+                else:
+                    print("⚠️ Fichier relations.txt non trouvé")
+                    return "# Aucune relation définie"
+                    
+            except Exception as e:
+                print(f"❌ Erreur lors du chargement : {str(e)}")
+
+                return "# Erreur chargement relations"                
+
+        def _safe_load_domain_descriptions(self) -> dict:
+            """Charge les descriptions de domaine avec gestion d'erreurs"""
+            try:
+                domain_path = Path(__file__).parent / 'prompts' / 'domain_descriptions.json'
+                if domain_path.exists():
+                    with open(domain_path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                print("⚠️ Fichier domain_descriptions.json non trouvé")
+                return {}
+            except Exception as e:
+                print(f"❌ Erreur chargement domain descriptions: {e}")
+
+                return {}        
+
+        def _safe_load_domain_to_tables_mapping(self) -> dict:
+            """Charge le mapping domaine-tables avec gestion d'erreurs"""
+            try:
+                mapping_path = Path(__file__).parent / 'prompts' / 'domain_tables_mapping.json'
+                if mapping_path.exists():
+                    with open(mapping_path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                print("⚠️ Fichier domain_tables_mapping.json non trouvé")
+                return {}
+            except Exception as e:
+                print(f"❌ Erreur chargement domain mapping: {e}")
+                return {}        
+
+
+        def _safe_load_question_templates(self) -> list:
+            """Charge les templates avec gestion d'erreurs robuste"""
+            try:
+                templates_path = Path(__file__).parent / 'templates_questions.json'
+                
+                if not templates_path.exists():
+                    print(f"⚠️ Création fichier templates: {templates_path}")
+                    templates_path.write_text('{"questions": []}', encoding='utf-8')
+                    return []
+
+                content = templates_path.read_text(encoding='utf-8').strip()
+                if not content:
+                    return []
+
                 data = json.loads(content)
                 if not isinstance(data.get("questions", []), list):
-                    raise ValueError("Format invalide: 'questions' doit être une liste")
+                    return []
                 
                 valid_templates = []
                 for template in data["questions"]:
                     if all(key in template for key in ["template_question", "requete_template"]):
                         valid_templates.append(template)
-                    else:
-                        print(f"⚠️ Template incomplet ignoré: {template.get('description', 'sans description')}")
                 
                 return valid_templates
 
-            except json.JSONDecodeError as e:
-                print(f"❌ Fichier JSON corrompu, réinitialisation. Erreur: {e}")
-                backup_path = templates_path.with_suffix('.bak.json')
-                templates_path.rename(backup_path)
-                templates_path.write_text('{"questions": []}', encoding='utf-8')
+            except Exception as e:
+                print(f"❌ Erreur chargement templates: {e}")
                 return []
-
-        except Exception as e:
-            print(f"❌ Erreur critique lors du chargement: {e}")
-            return []
-    
-    def find_matching_template(self, question: str) -> Optional[Dict[str, Any]]:
-        exact_match = self._find_exact_template_match(question)
-        if exact_match:
-            return exact_match
-        
-        semantic_match, score = self.template_matcher.find_similar_template(question)
-        if semantic_match:
-            print(f"🔍 Template sémantiquement similaire trouvé (score: {score:.2f})")
-            return self._extract_variables(question, semantic_match)
-        
-        return None
-
-    def _find_exact_template_match(self, question: str) -> Optional[Dict[str, Any]]:
-        cleaned_question = question.rstrip(' ?')
-        for template in self.templates_questions:
-            pattern = template["template_question"]
-            regex_pattern = re.sub(r'\{(.+?)\}', r'(?P<\1>.+?)', pattern)
-            match = re.fullmatch(regex_pattern, cleaned_question, re.IGNORECASE)
-            if match:
-                variables = {k: v.strip() for k, v in match.groupdict().items()}
-                return {
-                    "template": template,
-                    "variables": variables if variables else {}
-                }
-        return None
-    
-    def _extract_variables(self, question: str, template: Dict) -> Dict[str, Any]:
-        template_text = template["template_question"]
-        variables = {}
-
-        annee_pattern = r"(20\d{2}[-\/]20\d{2})"
-        annee_match = re.search(annee_pattern, question)
-        if annee_match:
-            variables["AnneeScolaire"] = annee_match.group(1).replace("-", "/")
-        
-        var_names = re.findall(r'\{(.+?)\}', template_text)
-        for var_name in var_names:
-            if var_name not in variables:  
-                keyword_pattern = re.escape(template_text.split(f"{{{var_name}}}")[0].split()[-1])
-                pattern = fr"{keyword_pattern}\s+([^\s]+)"
-                match = re.search(pattern, question, re.IGNORECASE)
-                if match:
-                    variables[var_name] = match.group(1).strip(",.?!")
-        
-        return {
-            "template": template,
-            "variables": variables if variables else {}
-        }
-
-    def generate_query_from_template(self, template: Dict, variables: Dict) -> str:
-        requete = template["requete_template"]
-        if not variables:
-            return requete
-        
-        for var_name, var_value in variables.items():
-            clean_value = str(var_value).split('?')[0].strip(",.!?\"'")
-            
-            if var_name.lower() == "anneescolaire":
-                clean_value = clean_value.replace("-", "/")
-            
-            requete = requete.replace(f'{{{var_name}}}', clean_value)
-        
-        return requete
-
-    def get_relevant_domains(self, query: str, domain_descriptions: Dict[str, str]) -> List[str]:
-        """Identifies relevant domains based on a user query using DeepSeek."""
-        domain_desc_str = "\n".join([f"- {name}: {desc}" for name, desc in domain_descriptions.items()])
-        domain_prompt_content = f"""
-        Based on the following user question, identify ALL relevant domains from the list below.
-        Return only the names of the relevant domains, separated by commas. If no domain is relevant, return 'None'.
-
-        User Question: {query}
-
-        Available Domains and Descriptions:
-        {domain_desc_str}
-
-        Relevant Domains (comma-separated):
-        """
-        
-        try:
-            response = self.ask_llm(domain_prompt_content)
-            domain_names = response.strip()
-            
-            if domain_names.lower() == 'none' or not domain_names:
-                return []
-            return [d.strip() for d in domain_names.split(',')]
-        except Exception as e:
-            print(f"❌ Erreur lors de l'identification des domaines: {e}")
-            return []
-    
-    def get_tables_from_domains(self, domains: List[str], domain_to_tables_map: Dict[str, List[str]]) -> List[str]:
-        """Retrieves all tables associated with the given domains."""
-        tables = []
-        for domain in domains:
-            tables.extend(domain_to_tables_map.get(domain, []))
-        return sorted(list(set(tables)))
-
-    def format_result(self, result: str, question: str = "") -> str:
-        """
-        Formate les résultats SQL bruts en une table lisible
-        Args:
-            result: Le résultat brut de la requête SQL
-            question: La question originale (optionnelle)
-        Returns:
-            str: Le résultat formaté ou un message approprié
-        """
-        if not result or result.strip() in ["[]", ""] or "0 rows" in result.lower():
-            return "✅ Requête exécutée mais aucun résultat trouvé."
-        
-        try:
-            lines = [line.strip() for line in result.split('\n') if line.strip()]
-            if len(lines) == 1 and lines[0].startswith('(') and lines[0].endswith(')'):
-                value = lines[0][1:-1].strip()  
-                return f"Résultat : {value}"
-            
-            if len(lines) > 1:
-                headers = [h.strip() for h in lines[0].split('|')]
-                rows = []
-                
-                for line in lines[1:]:
-                    row = [cell.strip() for cell in line.split('|')]
-                    rows.append(row)
-                
-                formatted = []
-                if question:
-                    formatted.append(f"Résultats pour: {question}\n")
-                
-                # En-tête
-                header_line = " | ".join(headers)
-                formatted.append(header_line)
-                
-                # Séparateur
-                separator = "-+-".join(['-' * len(h) for h in headers])
-                formatted.append(separator)
-                
-                # Données
-                for row in rows:
-                    formatted.append(" | ".join(row))
-                
-                return "\n".join(formatted)
-            
-            return f"{result}"
-        
-        except Exception as e:
-            return f"❌ Erreur de formatage: {str(e)}\nRésultat brut:\n{result}"
-
-    def _safe_load_relations(self) -> str:
-        """Charge les relations avec gestion d'erreurs"""
-        try:
-            relations_path = Path(__file__).parent / 'prompts' / 'relations.txt'
-            if relations_path.exists():
-                return relations_path.read_text(encoding='utf-8')
-            print("⚠️ Fichier relations.txt non trouvé, utilisation valeur par défaut")
-            return "# Aucune relation définie"
-        except Exception as e:
-            print(f"❌ Erreur chargement relations: {e}")
-            return "# Erreur chargement relations"
-    
-    def _safe_load_domain_descriptions(self) -> dict:
-        """Charge les descriptions de domaine avec gestion d'erreurs"""
-        try:
-            domain_path = Path(__file__).parent / 'prompts' / 'domain_descriptions.json'
-            if domain_path.exists():
-                with open(domain_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            print("⚠️ Fichier domain_descriptions.json non trouvé")
-            return {}
-        except Exception as e:
-            print(f"❌ Erreur chargement domain descriptions: {e}")
-            return {}
-    
-    def _safe_load_domain_to_tables_mapping(self) -> dict:
-        """Charge le mapping domaine-tables avec gestion d'erreurs"""
-        try:
-            mapping_path = Path(__file__).parent / 'prompts' / 'domain_tables_mapping.json'
-            if mapping_path.exists():
-                with open(mapping_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            print("⚠️ Fichier domain_tables_mapping.json non trouvé")
-            return {}
-        except Exception as e:
-            print(f"❌ Erreur chargement domain mapping: {e}")
-            return {}
-    
-    def _safe_load_question_templates(self) -> list:
-        """Charge les templates avec gestion d'erreurs robuste"""
-        try:
-            templates_path = Path(__file__).parent / 'templates_questions.json'
-            
-            if not templates_path.exists():
-                print(f"⚠️ Création fichier templates: {templates_path}")
-                templates_path.write_text('{"questions": []}', encoding='utf-8')
-                return []
-
-            content = templates_path.read_text(encoding='utf-8').strip()
-            if not content:
-                return []
-
-            data = json.loads(content)
-            if not isinstance(data.get("questions", []), list):
-                return []
-            
-            valid_templates = []
-            for template in data["questions"]:
-                if all(key in template for key in ["template_question", "requete_template"]):
-                    valid_templates.append(template)
-            
-            return valid_templates
-
-        except Exception as e:
-            print(f"❌ Erreur chargement templates: {e}")
-            return []

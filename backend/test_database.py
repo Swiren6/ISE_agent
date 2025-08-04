@@ -1,36 +1,36 @@
 
 #!/usr/bin/env python3
 """
-Script de test pour la base de données MySQL
+Script de test pour la base de données db
 """
 import os
-import mysql.connector
+import db.connector
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
 load_dotenv()
 
-def test_mysql_connection():
-    """Test la connexion MySQL"""
+def test_db_connection():
+    """Test la connexion db"""
     config = {
-        'host': os.getenv('MYSQL_HOST', 'localhost'),
-        'port': int(os.getenv('MYSQL_PORT', '3306')),
-        'user': os.getenv('MYSQL_USER', 'root'),
-        'password': os.getenv('MYSQL_PASSWORD', 'root'),
-        'database': os.getenv('MYSQL_DATABASE', 'bd_eduise2'),
+        'host': os.getenv('db_HOST', 'localhost'),
+        'port': int(os.getenv('db_PORT', '3306')),
+        'user': os.getenv('db_USER', 'root'),
+        'password': os.getenv('db_PASSWORD', 'root'),
+        'database': os.getenv('db_DATABASE', 'bd_eduise2'),
         'charset': 'utf8mb4',
         'use_unicode': True
     }
     
-    print("🔍 Test de connexion MySQL...")
+    print("🔍 Test de connexion db...")
     print(f"Host: {config['host']}:{config['port']}")
     print(f"User: {config['user']}")
     print(f"Database: {config['database']}")
     
     try:
         # Test de connexion
-        conn = mysql.connector.connect(**config)
-        print("✅ Connexion MySQL réussie!")
+        conn = db.connector.connect(**config)
+        print("✅ Connexion db réussie!")
         
         # Test des tables disponibles
         cursor = conn.cursor()
@@ -73,10 +73,10 @@ def test_mysql_connection():
         conn.close()
         return True
         
-    except mysql.connector.Error as e:
-        print(f"❌ Erreur MySQL: {e}")
+    except db.connector.Error as e:
+        print(f"❌ Erreur db: {e}")
         print("\n💡 Solutions possibles:")
-        print("1. Vérifiez que MySQL est démarré")
+        print("1. Vérifiez que db est démarré")
         print("2. Vérifiez les paramètres dans le fichier .env")
         print("3. Vérifiez que la base de données 'bd_eduise2' existe")
         print("4. Vérifiez les permissions de l'utilisateur 'root'")
@@ -90,12 +90,14 @@ def test_env_variables():
     print("⚙️ Test des variables d'environnement:")
     
     required_vars = [
-        'MYSQL_HOST',
-        'MYSQL_USER', 
-        'MYSQL_PASSWORD',
-        'MYSQL_DATABASE',
-        'MYSQL_PORT'
+        'db_HOST',
+        'db_USER', 
+        'db_PASSWORD',
+        'db_DATABASE',
+        'db_PORT'
     ]
+    
+    
     
     optional_vars = [
         'JWT_SECRET_KEY',
@@ -133,7 +135,7 @@ def main():
     
     if env_ok:
         # Test de la base de données
-        db_ok = test_mysql_connection()
+        db_ok = test_db_connection()
         
         if db_ok:
             print("\n🎉 Tous les tests sont passés!")

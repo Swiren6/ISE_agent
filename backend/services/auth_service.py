@@ -46,7 +46,8 @@ class AuthService:
                 current_app.logger.error("❌ Impossible d'obtenir une connexion DB")
                 return None
                 
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)  # ✅
+
             current_app.logger.debug("✅ Curseur DB créé")
 
             # ✅ Requête avec logging

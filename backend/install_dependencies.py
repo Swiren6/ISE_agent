@@ -21,11 +21,17 @@ def run_command(command, description=""):
 def install_basic_requirements():
     """Installation des dépendances de base"""
     basic_packages = [
+        # Flask core
         "flask==2.3.3",
         "flask-jwt-extended==4.5.3", 
-        "flask-mysqldb==1.0.1",
         "flask-cors==4.0.0",
+
+        # DB + ORM
         "mysql-connector-python==8.2.0",
+        "PyMySQL==1.1.0",
+        "SQLAlchemy==2.0.23",
+
+        # Config et logs
         "python-dotenv==1.0.0",
         "colorlog==6.8.0"
     ]
@@ -34,17 +40,37 @@ def install_basic_requirements():
         if not run_command(f"pip install {package}", f"Installation de {package}"):
             print(f"⚠️ Échec installation {package} - continuons...")
 
+def install_extended_requirements():
+    """Installation des dépendances supplémentaires"""
+    extended_packages = [
+        # Analyse et Data
+        "pandas",
+        "matplotlib",
+        "tabulate",
+
+        # API alternative (FastAPI)
+        "fastapi",
+        "uvicorn",
+
+        # Validation
+        "pydantic>=2.0"
+    ]
+
+    print("\n📦 Installation des packages supplémentaires...")
+    for package in extended_packages:
+        run_command(f"pip install {package}", f"Installation de {package}")
+
 def install_optional_requirements():
-    """Installation des dépendances optionnelles"""
+    """Installation des dépendances optionnelles IA / LLM"""
     optional_packages = [
-        
+        ("together", "Client Together.ai"), 
         ("tiktoken", "Tokenizer OpenAI"), 
         ("langchain", "Framework Langchain"),
         ("langchain-community", "Langchain Community"),
         ("openai", "Client OpenAI")
     ]
     
-    print("\n📦 Installation des packages optionnels...")
+    print("\n📦 Installation des packages IA optionnels...")
     for package, description in optional_packages:
         run_command(f"pip install {package}", f"{description}")
 
@@ -77,14 +103,20 @@ OPENAI_API_KEY=your-openai-api-key
 
 def test_imports():
     """Test les imports principaux"""
-    print("\n🧪 Test des imports...")
-    
+    print("\n🧪 Test des imports essentiels...")
+
     imports_to_test = [
         ("flask", "Flask"),
         ("mysql.connector", "MySQL Connector"),
         ("dotenv", "Python Dotenv"),
         ("flask_jwt_extended", "Flask JWT Extended"),
-        ("flask_cors", "Flask CORS")
+        ("flask_cors", "Flask CORS"),
+        ("pandas", "Pandas"),
+        ("matplotlib", "Matplotlib"),
+        ("tabulate", "Tabulate"),
+        ("pydantic", "Pydantic"),
+        ("fastapi", "FastAPI"),
+        ("uvicorn", "Uvicorn")
     ]
     
     success_count = 0
@@ -95,22 +127,23 @@ def test_imports():
             success_count += 1
         except ImportError:
             print(f"❌ {name} - Manquant")
-    
-    # Test imports optionnels
+
+    # Test imports IA optionnels
+    print("\n🔍 Test des imports IA optionnels...")
     optional_imports = [
         ("together", "Together.ai"),
         ("tiktoken", "Tiktoken"),
-        ("langchain", "Langchain")
+        ("langchain", "Langchain"),
+        ("openai", "OpenAI")
     ]
     
-    print("\n🔍 Test des imports optionnels...")
     for module, name in optional_imports:
         try:
             __import__(module)
             print(f"✅ {name} - Disponible")
         except ImportError:
             print(f"⚠️ {name} - Non disponible (optionnel)")
-    
+
     print(f"\n📊 Résultat: {success_count}/{len(imports_to_test)} imports essentiels réussis")
     return success_count == len(imports_to_test)
 
@@ -120,18 +153,21 @@ def main():
     # Mise à jour pip
     run_command("python -m pip install --upgrade pip", "Mise à jour pip")
     
-    # Installation des dépendances de base
-    print("\n📦 Installation des dépendances essentielles...")
+    # Installation des dépendances
+    print("\n📦 Étape 1: Dépendances essentielles...")
     install_basic_requirements()
     
-    # Installation des dépendances optionnelles
+    print("\n📦 Étape 2: Dépendances supplémentaires...")
+    install_extended_requirements()
+    
+    print("\n📦 Étape 3: Dépendances IA optionnelles...")
     install_optional_requirements()
     
-    # Création du fichier .env
+    # Fichier .env
     print("\n⚙️ Configuration...")
     create_env_template()
     
-    # Test des imports
+    # Test
     if test_imports():
         print("\n🎉 Installation terminée avec succès!")
         print("\n📋 Prochaines étapes:")
@@ -140,7 +176,7 @@ def main():
         print("3. Lancez l'application avec: python app.py")
     else:
         print("\n⚠️ Installation terminée avec des avertissements")
-        print("Certaines dépendances optionnelles peuvent manquer")
+        print("Certaines dépendances peuvent manquer ou échouer")
 
 if __name__ == "__main__":
     main()
