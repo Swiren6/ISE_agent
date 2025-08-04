@@ -30,11 +30,9 @@
   "1f5572e59e5cf5838f218b36446a676e": {
     "question_template": "donne moi le nombre des eleves inscrits pendant {AnneeScolaire}",
     "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscrits\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
+  },
+  "e2bdd171a8df77b8b7306d49aa2566fa": {
+    "question_template": "{nomfr} {prenomfr} {nomfr} {prenomfr} {nomfr} {prenomfr}",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves FROM eleve;"
   }
 }
-
-
-
-
-  
-
