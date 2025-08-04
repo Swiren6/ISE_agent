@@ -4,8 +4,13 @@ import MySQLdb
 from urllib.parse import quote_plus
 import os
 import logging
-from contextlib import contextmanager
+from dotenv import load_dotenv
+import mysql.connector as mysql_connector
 
+
+
+from contextlib import contextmanager
+load_dotenv()
 mysql = MySQL()
 logger = logging.getLogger(__name__)
 
@@ -18,7 +23,7 @@ def init_db(app):
         app.config['MYSQL_DB'] = os.getenv('MYSQL_DATABASE')
         app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
         app.config['MYSQL_AUTOCOMMIT'] = True
-        app.config['MYSQL_CONNECT_TIMEOUT'] = 10
+        app.config['MYSQL_CONNECT_TIMEOUT'] = 60
         
         # Validation des variables d'environnement
         required_vars = ['MYSQL_HOST', 'MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE']
@@ -110,18 +115,76 @@ def get_db_connection():
     except Exception as e:
         logger.error(f"❌ Erreur connexion LangChain: {e}")
         return None
+
+
+class ExtendedSQLDatabase(SQLDatabase):
+    def __init__(self, engine, **kwargs):
+        super().__init__(engine, **kwargs)
+        self.config = {
+            'host': os.getenv('MYSQL_HOST'),
+            'user': os.getenv('MYSQL_USER'),
+            'password': os.getenv('MYSQL_PASSWORD'),
+            'database': os.getenv('MYSQL_DATABASE'),
+        }
+
+    def get_schema(self):
+        try:
+            return self.run("SHOW TABLES")
+        except Exception as e:
+            logger.error(f"Erreur get_schema : {e}")
+            return {}
+    def get_connection(self):
+        try:
+            conn = mysql_connector.connect(**self.config)
+
+            conn.ping(reconnect=True)
+            logger.info("[🔗] Connexion à la base de données établie.")
+            return conn
+        except mysql.connector.Error as err:
+            logger.error(f"[❌] Erreur MySQL: {err}")
+            raise
+
+    def execute_query(self, query, params=None, fetch=True):
+        conn = self.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            logger.info(f"[SQL EXECUTE] Requête exécutée:\n{query}")
+            if params:
+                logger.info(f"[SQL PARAMS] Paramètres: {params}")
+            
+            cursor.execute(query, params or ())
+            if fetch:
+                results = cursor.fetchall()
+                conn.commit()
+                logger.info(f"[SQL RESULT] {len(results)} lignes retournées")
+                return {'success': True, 'data': results}
+            conn.commit()
+            return {'success': True}
+        except Exception as e:
+            logger.error(f"[SQL ERROR] Erreur d'exécution: {e}")
+            return {'success': False, 'error': str(e)}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_simplified_relations_text(self):
+        try:
+            fk_relations = self.get_foreign_key_relations()
+            simplified = {}
+            for row in fk_relations:
+                table = row['TABLE_NAME']
+                referenced_table = row['REFERENCED_TABLE_NAME']
+                if table not in simplified:
+                    simplified[table] = set()
+                simplified[table].add(referenced_table)
+
+            lines = ["Relations clés principales entre tables :\n"]
+            for table, references in simplified.items():
+                line = f"- {table} liée à " + ", ".join(sorted(references)) + "."
+                lines.append(line)
+            return "\n".join(lines)
+        except Exception as e:
+            logger.error(f"Erreur get_simplified_relations_text : {e}")
+            return ""
     
-@contextmanager
-def get_db_connection_1():
-    """Context manager pour gérer les connexions MySQL proprement"""
-    connection = None
-    try:
-        connection = get_db()
-        yield connection
-    except Exception as e:
-        if connection:
-            connection.rollback()
-        raise e
-    finally:
-        if connection:
-            connection.close()
+

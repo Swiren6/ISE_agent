@@ -15,4 +15,3 @@ def ask_llm(prompt: str) -> str:
     except Exception as e:
         print(f"❌ Erreur LLM: {str(e)}")
         return ""
-

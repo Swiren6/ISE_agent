@@ -83,8 +83,10 @@ Voici la structure détaillée des tables pertinentes pour votre tâche (nom des
 ---
 **Informations Clés et Relations Fréquemment Utilisées pour une meilleure performance :**
 {{relations}}
-
 ---
+
+
+
 **Instructions pour la génération SQL :**
 1.  Répondez UNIQUEMENT par une requête SQL MySQL valide et correcte.
 2.  Ne mettez AUCUN texte explicatif ou commentaire avant ou après la requête SQL. La réponse doit être purement la requête.

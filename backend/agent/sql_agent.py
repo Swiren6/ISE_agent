@@ -1,623 +1,397 @@
-# import openai
-# from together import Together
-# import os
-# import re
-# import json
-# from functools import lru_cache
-# from decimal import Decimal
-# import matplotlib.pyplot as plt
-# from datetime import datetime
-# from config.database import get_db_connection, get_db
-# from tabulate import tabulate
-# from openai import OpenAI
-# from pathlib import Path
-# import matplotlib.pyplot as plt
-# import pandas as pd
-# import base64
-# import tempfile
-# import matplotlib
-# import logging
-
-# matplotlib.use('Agg') 
-
-# logger = logging.getLogger(__name__)
-
-# class SQLAgent:
-#     def __init__(self, db, model="deepseek-ai/DeepSeek-V3", temperature=0.3, max_tokens=500):
-#         self.db = db if db else get_db_connection()
-#         self.together_client = Together(api_key=os.getenv('TOGETHER_API_KEY'))
-#         self.model = model
-#         self.temperature = temperature
-#         self.max_tokens = max_tokens
-#         self.last_generated_sql = ""
-#         self.query_history = []
-#         self.schema = self._load_db_schema()
-
-#         try:
-#             self.schema = db.get_schema()  
-#         except Exception as e:
-#             logger.warning(f"⚠️ Impossible de récupérer le schéma: {e}")
-#             self.schema = []
-#     def _serialize_data(self, data):
-#         if isinstance(data, (list, tuple)):
-#             return [self._serialize_data(item) for item in data]
-#         elif isinstance(data, dict):
-#             return {key: self._serialize_data(value) for key, value in data.items()}
-#         elif hasattr(data, 'isoformat'):
-#             return data.isoformat()
-#         elif isinstance(data, Decimal):
-#             return float(data)
-#         return data
-
-#     def load_prompt_for_query(self, query):
-#         if any(word in query.lower() for word in ["nom", "élève", "classe", "parent", "inscription"]):
-#             path = Path(__file__).parent / "prompts" / "prompt_eleve.txt" 
-#             extra_info = ""
-#         elif any(word in query.lower() for word in ["note", "matière", "absence", "emploi", "moyenne"]):
-#             path = Path(__file__).parent / "prompts" / "prompt_pedagogie.txt"
-#             # Injection du texte des relations FK dans le prompt pédagogique
-#             try:
-#                 extra_info = "\n\n" + self.db.get_simplified_relations_text()
-#             except Exception as e:
-#                 logger.error(f"Erreur récupération relations FK : {e}")
-#                 extra_info = ""
-#         elif any(word in query.lower() for word in ["paiement", "tranche", "cantine", "montant", "transport"]):
-#             path = Path(__file__).parent / "prompts" / "prompt_finance.txt"
-#             extra_info = ""
-#         else:
-#             path = Path(__file__).parent / "prompts" / "prompt_eleve.txt"
-#             extra_info = ""
-
-#         try:
-#             with open(path, 'r', encoding='utf-8') as f:
-#                 prompt = f.read()
-#             return prompt + extra_info
-#         except Exception as e:
-#             logger.error(f"Erreur chargement prompt: {e}")
-#             raise
-    
-#     def detect_graph_type(user_query):
-#         user_query = user_query.lower()
-#         if any(k in user_query for k in ["pie", "camembert", "diagramme circulaire"]):
-#             return "pie"
-#         elif any(k in user_query for k in ["histogramme", "bar chart", "barres"]):
-#             return "bar"
-#         elif any(k in user_query for k in ["ligne", "line chart", "courbe"]):
-#             return "line"
-#         else:
-#             return None
-
-#     def generate_sql(self, natural_query):
-#         try:
-#             prompt = self.load_prompt_for_query(natural_query)
-#             prompt += f"\n### Question:\n{natural_query}\n### Format:\nRetournez uniquement la requête SQL sans commentaire ni explication."
-#             messages = [{"role": "system", "content": prompt}]
-#             print("Clé OpenAI utilisée :", openai.api_key)
-
-#             response = self.together_client.chat.completions.create(
-#             model=self.model,
-#             messages=messages,
-#             temperature=self.temperature,
-#             max_tokens=self.max_tokens
-#         )
-#             sql = self._extract_sql(response.choices[0].message.content)
-#             if not self._validate_sql(sql):
-#                 raise ValueError("Validation SQL échouée")
-#             self.last_generated_sql = sql
-#             self.query_history.append({
-#                 'query': natural_query,
-#                 'sql': sql,
-#                 'timestamp': datetime.now()
-#             })
-#             return sql
-#         except Exception as e:
-#             logger.error(f"Erreur génération SQL: {str(e)}")
-#             raise
-
-#     def _extract_sql(self, text):
-#         sql = re.sub(r'(?i)^\s*(?:--|#).*$', '', text, flags=re.MULTILINE)
-#         sql = re.sub(r'(?:sql)?\s*([^`]+)', r'\1', text, flags=re.DOTALL)
-#         return sql.strip().rstrip(';')
-#     def _strip_db_prefix(self, table_name):
-#         return table_name.split('.')[-1]  # garde uniquement le nom de la table
-
-#     def _validate_sql(self, sql):
-#         sql_lower = sql.lower()
-#         forbidden = ['drop', 'delete', 'update', 'insert', ';--', 'exec']
-#         if any(cmd in sql_lower for cmd in forbidden):
-#             raise ValueError("Commande SQL dangereuse détectée")
-#         if not re.match(r'^\s*select\s+', sql_lower):
-#             raise ValueError("Seules les requêtes SELECT sont autorisées")
-
-#         # Extraire les noms de tables après FROM et JOIN
-#         used_tables = set(re.findall(r'\bfrom\s+([a-zA-Z0-9_.]+)|\bjoin\s+([a-zA-Z0-9_.]+)', sql_lower))
-#         for table in (t for group in used_tables for t in group if t):
-#             clean_table = self._strip_db_prefix(table)
-#             if clean_table not in self.schema:
-#                 raise ValueError(f"Table inconnue: {table}")
-#         return True
-    
-#     def execute_query(self, sql, params=None):
-#         """Exécute une requête SQL avec gestion d'erreur améliorée"""
-#         try:
-#             conn = get_db()
-#             cursor = conn.cursor(dictionary=True)
-#             cursor.execute(sql, params or ())
-            
-#             if sql.strip().upper().startswith('SELECT'):
-#                 result = cursor.fetchall()
-#                 result = self._serialize_data(result)
-#                 return {'success': True, 'data': result}
-#             else:
-#                 conn.commit()
-#                 return {'success': True, 'affected_rows': cursor.rowcount}
-                
-#         except Exception as e:
-#             logger.error(f"❌ Erreur SQL: {e}")
-#             return {'success': False, 'error': str(e)}
-#         finally:
-#             cursor.close()
-#             conn.close() 
-
-#     def execute_natural_query(self, natural_query):
-#         try:
-#             sql = self.generate_sql(natural_query)
-#             result = self.db.execute_query(sql)
-#             if not result['success']:
-#                 corrected = self._auto_correct(sql, result['error'])
-#                 if corrected:
-#                     result = self.db.execute_query(corrected)
-#                     if result['success']:
-#                         return self._format_results(result['data'], user_query=natural_query)
-#                 raise ValueError(f"Erreur SQL: {result['error']}")
-#             return self._format_results(result['data'], user_query=natural_query)
-#         except Exception as e:
-#             logger.error(f"Erreur exécution: {str(e)}")
-#             raise
-
-#     def _auto_correct(self, bad_sql, error_msg):
-#         try:
-#             correction_prompt = f"""
-#                 Corrige cette requête SQL:
-#                 Requête: {bad_sql}
-#                 Erreur: {error_msg}
-#                 Schéma disponible:
-#                 {json.dumps(self.schema, indent=2)}
-# """
-#             response = openai.chat.completions.create(
-#                 model=self.model,
-#                 messages=[{"role": "user", "content": correction_prompt}],
-#                 temperature=0,
-#                 max_tokens=500
-#             )
-#             corrected_sql = self._extract_sql(response.choices[0].message.content)
-#             if self._validate_sql(corrected_sql):
-#                 return corrected_sql
-#         except Exception as e:
-#             logger.error(f"Correction échouée: {str(e)}")
-#         return None
-    
-#     def detect_graph_type(self, user_query):
-#         user_query = user_query.lower()
-#         if any(k in user_query for k in ["pie", "camembert", "diagramme circulaire"]):
-#             return "pie"
-#         elif any(k in user_query for k in ["histogramme", "bar chart", "barres"]):
-#             return "bar"
-#         elif any(k in user_query for k in ["ligne", "line chart", "courbe"]):
-#             return "line"
-#         else:
-#             return None
-
-#     def extract_name_from_query(query):
-#         # Exemple basique pour capturer : "attestation de Rania Zahraoui"
-#         pattern = r"attestation de\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)"
-#         match = re.search(pattern, query, re.IGNORECASE)
-#         if match:
-#             return match.group(1).strip()
-#         return None
-#     def _load_db_schema(self):
-#         """Charge dynamiquement le schéma de la base"""
-#         schema = {}
-#         try:
-#             conn = get_db()
-#             cursor = conn.cursor(dictionary=True)
-            
-#             cursor.execute("SHOW TABLES")
-#             tables = [list(row.values())[0] for row in cursor.fetchall()]
-            
-#             for table in tables:
-#                 cursor.execute(f"SHOW COLUMNS FROM {table}")
-#                 schema[table] = [col['Field'] for col in cursor.fetchall()]
-                
-#         except Exception as e:
-#             logger.error(f"Erreur chargement schéma: {e}")
-#         finally:
-#             cursor.close()
-#             conn.close()
-#         return schema
-#     def get_student_info_by_name(self, full_name):
-#         """Récupère les infos d'un élève à partir de son nom complet"""
-#         try:
-#             conn = get_db()
-#             cursor = conn.cursor(dictionary=True)
-            
-#             sql = """
-#                 SELECT 
-#                     p.NomFr, p.PrenomFr, 
-#                     e.DateNaissance, 
-#                     IFNULL(e.LieuNaissance, e.AutreLieuNaissance) AS lieu_de_naissance,
-#                     c.CODECLASSEFR AS classe, 
-#                     e.IdPersonne AS matricule
-#                 FROM eleve e
-#                 JOIN personne p ON e.IdPersonne = p.id
-#                 LEFT JOIN inscriptioneleve ie ON e.id = ie.Eleve
-#                 LEFT JOIN classe c ON ie.Classe = c.id
-#                 WHERE CONCAT(p.NomFr, ' ', p.PrenomFr) LIKE %s
-#                 LIMIT 1
-#                 """
-            
-#             cursor.execute(sql, (f"%{full_name}%",))
-#             result = cursor.fetchone()
-#             cursor.close()
-#             conn.close()
-            
-#             return result
-            
-#         except Exception as e:
-#             logger.error(f"Erreur get_student_info_by_name: {str(e)}")
-#             return None   
-#     def generate_auto_graph(self, df, graph_type=None):
-#             if df.empty:
-#                 return "Aucun résultat à afficher."
-
-#             exclude_cols = ['id', 'ids', 'anneescolaire', 'année scolaire', 'annee_scolaire']
-#             numeric_cols = [col for col in df.select_dtypes(include='number').columns if col.lower() not in exclude_cols]
-#             categorical_cols = [col for col in df.select_dtypes(exclude='number').columns if col.lower() not in exclude_cols]
-
-#             if not numeric_cols or not categorical_cols:
-#                 return df.to_markdown()
-
-#             x_col = categorical_cols[0]
-#             y_cols = numeric_cols
-
-#             if graph_type == "pie":
-#                 df_grouped = df.groupby(x_col)[y_cols[0]].sum()
-#                 plt.figure(figsize=(6, 6))
-#                 df_grouped.plot(kind='pie', autopct='%1.1f%%', ylabel='', legend=False)
-#                 plt.title(f"{y_cols[0]} par {x_col}")
-#                 plt.tight_layout()
-
-#             elif graph_type == "line":
-#                 print("Colonnes catégorielles:", categorical_cols)
-#                 print("Colonnes numériques:", numeric_cols)
-#                 print("x_col choisi:", x_col)
-
-#                 order = ["1ère", "2ème", "3ème", "4ème", "5ème", "6ème", "7ème", "8ème", "9ème"]
-
-#                 if 'niveau' in x_col.lower():
-#                     df_sorted = df.copy()
-#                     df_sorted[x_col] = df_sorted[x_col].str.strip().str.replace(" ", "").str.lower()
-#                     order_clean = [x.lower() for x in order]
-#                     df_sorted[x_col] = pd.Categorical(df_sorted[x_col], categories=order_clean, ordered=True)
-#                     df_sorted = df_sorted.sort_values(x_col)
-#                 elif 'date' in x_col.lower() or 'année' in x_col.lower():
-#                     df_sorted = df.sort_values(x_col)
-#                 else:
-#                     df_sorted = df
-
-#                 plt.figure(figsize=(10, 6))
-#                 plt.plot(df_sorted[x_col], df_sorted[y_cols[0]], marker='o')
-#                 plt.title(f"Évolution de {y_cols[0]} selon {x_col}")
-#                 plt.xlabel(x_col)
-#                 plt.ylabel(y_cols[0])
-#                 plt.xticks(rotation=45)
-#                 plt.tight_layout()
-
-#             elif graph_type == "bar":
-#                 plt.figure(figsize=(10, 6))
-#                 df.plot(x=x_col, y=y_cols, kind='bar')
-#                 plt.title(f"{', '.join(y_cols)} par {x_col}")
-#                 plt.xticks(rotation=45)
-#                 plt.tight_layout()
-
-#             else:
-#                 # Logique par défaut si aucun type précisé
-#                 if len(y_cols) == 1 and df[x_col].nunique() <= 7:
-#                     df_grouped = df.groupby(x_col)[y_cols[0]].sum()
-#                     plt.figure(figsize=(6, 6))
-#                     df_grouped.plot(kind='pie', autopct='%1.1f%%', ylabel='', legend=False)
-#                     plt.title(f"{y_cols[0]} par {x_col}")
-#                 elif 'date' in x_col.lower() or 'année' in x_col.lower() or pd.to_datetime(df[x_col], errors='coerce').notna().all():
-#                     df_sorted = df.sort_values(x_col)
-#                     plt.figure(figsize=(10, 6))
-#                     df_sorted.plot(x=x_col, y=y_cols, kind='line', marker='o')
-#                     plt.title(f"Évolution de {', '.join(y_cols)} selon {x_col}")
-#                 else:
-#                     plt.figure(figsize=(10, 6))
-#                     df.plot(x=x_col, y=y_cols, kind='bar')
-#                     plt.title(f"{', '.join(y_cols)} par {x_col}")
-
-#                 plt.xticks(rotation=45)
-#                 plt.tight_layout()
-
-#             # Générer le graphique en base64
-#             tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-#             tmp_path = tmpfile.name
-#             tmpfile.close()
-#             plt.savefig(tmp_path)
-#             plt.close()
-
-#             with open(tmp_path, 'rb') as f:
-#                 img_bytes = f.read()
-#             encoded = base64.b64encode(img_bytes).decode('utf-8')
-
-#             return f"![Graphique](data:image/png;base64,{encoded})"
-
-#     def _format_results(self, data, user_query=None):
-#         serialized_data = self._serialize_data(data)
-#         if not serialized_data:
-#             return "Aucun résultat trouvé."
-
-#         df = pd.DataFrame(serialized_data)
-
-#         # Détection du type de graphique demandé dans la requête utilisateur
-#         graph_type = None
-#         if user_query:
-#             graph_type = self.detect_graph_type(user_query)
-
-#         # Logique existante avec passage de graph_type
-#         if (len(df.columns) >= 2 and 
-#             any('niveau' in col.lower() for col in df.columns) and 
-#             any('inscription' in col.lower() for col in df.columns)):
-#             return self.generate_auto_graph(df, graph_type=graph_type)
-        
-#         if df.empty:
-#             return "Aucun résultat trouvé."
-
-#         if len(df) > 10 or len(df.select_dtypes(include='number').columns) > 1:
-#             return self.generate_auto_graph(df, graph_type=graph_type)
-
-#         return tabulate(df, headers='keys', tablefmt='github')
-
-
-import os
+import openai
+import logging
 import re
 import json
-import logging
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+import io
+import base64
+import os
+from functools import lru_cache
 from decimal import Decimal
+from datetime import datetime
+from config.database import get_db_connection
+from tabulate import tabulate
 import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib
+import io
 import base64
-import tempfile
-from together import Together
-from config.database import get_db_connection, get_db
+import matplotlib.pyplot as plt
 
-# Configuration du logger
+matplotlib.use('Agg')  # Important pour les environnements sans affichage
+plt.switch_backend('Agg')
+
 logger = logging.getLogger(__name__)
 
 class SQLAgent:
-    def __init__(self, db=None, model: str = "deepseek-ai/DeepSeek-V3", 
-                 temperature: float = 0.3, max_tokens: int = 500):
-        """
-        Initialise l'agent SQL avec une connexion à la base de données.
-        
-        Args:
-            db: Connexion à la base de données (optionnelle)
-            model: Modèle LLM à utiliser
-            temperature: Créativité du modèle (0-1)
-            max_tokens: Nombre maximum de tokens en sortie
-        """
+    def __init__(self, db=None, model="gpt-4o", temperature=0.3, max_tokens=500):
         self.db = db if db else get_db_connection()
-        self.together_client = Together(api_key=os.getenv('TOGETHER_API_KEY'))
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.last_generated_sql = ""
         self.query_history = []
-        self.schema = self._load_db_schema()
+        self.conversation_history = []
+        self.cost_per_1k_tokens = 0.005  # par exemple
 
-    def _load_db_schema(self) -> Dict[str, List[str]]:
-        """Charge dynamiquement le schéma de la base de données"""
-        schema = {}
-        conn = None
-        cursor = None
-        
         try:
-            conn = get_db()
-            cursor = conn.cursor(dictionary=True)
-            
-            # Récupération des tables
-            cursor.execute("SHOW TABLES")
-            tables = [list(row.values())[0] for row in cursor.fetchall()]
-            
-            # Récupération des colonnes pour chaque table
-            for table in tables:
-                cursor.execute(f"SHOW COLUMNS FROM {table}")
-                schema[table] = [col['Field'] for col in cursor.fetchall()]
-                
+            self.schema = self.db.get_schema()
         except Exception as e:
-            logger.error(f"Erreur lors du chargement du schéma: {str(e)}")
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
-        
-        return schema
+            logger.warning(f"⚠️ Impossible de récupérer le schéma: {e}")
+            self.schema = []
 
-    def _serialize_data(self, data: Any) -> Any:
-        """Sérialise les données pour le JSON (gère Decimal, datetime, etc.)"""
+    def _serialize_data(self, data):
         if isinstance(data, (list, tuple)):
             return [self._serialize_data(item) for item in data]
         elif isinstance(data, dict):
             return {key: self._serialize_data(value) for key, value in data.items()}
-        elif hasattr(data, 'isoformat'):  # Pour les datetime
+        elif hasattr(data, 'isoformat'):
             return data.isoformat()
         elif isinstance(data, Decimal):
             return float(data)
         return data
 
-    def generate_sql(self, natural_query: str) -> str:
-        """
-        Génère une requête SQL à partir d'une question en langage naturel.
-        
-        Args:
-            natural_query: Question en langage naturel
-            
-        Returns:
-            Requête SQL générée
-        """
+    def load_prompt_for_query(self, query):
+        query_lower = query.lower()
+        extra_info = ""
+
+        if any(word in query_lower for word in ["nom", "élève", "classe", "parent", "inscription"]):
+            path = "agent/prompts/prompt_eleve.txt"
+        elif any(word in query_lower for word in ["note", "matière", "absence", "emploi", "moyenne"]):
+            path = "agent/prompts/prompt_pedagogie.txt"
+            try:
+                extra_info = "\n\n" + self.db.get_simplified_relations_text()
+            except Exception as e:
+                logger.error(f"Erreur récupération relations FK : {e}")
+        elif any(word in query_lower for word in ["paiement", "tranche", "cantine", "montant", "transport"]):
+            path = "agent/prompts/prompt_finance.txt"
+        else:
+            path = "agent/prompts/prompt_eleve.txt"
+
         try:
-            prompt = self._build_prompt(natural_query)
+            with open(path, 'r', encoding='utf-8') as f:
+                prompt = f.read()
+            return prompt + extra_info
+        except Exception as e:
+            logger.error(f"Erreur chargement prompt: {e}")
+            raise
+
+    def generate_sql(self, natural_query):
+        try:
+            prompt = self.load_prompt_for_query(natural_query)
+            prompt += f"\n### Question:\n{natural_query}\n### Format:\nRetournez UNIQUEMENT la requête SQL valide, SANS commentaires, SANS backticks ```, SANS texte explicatif."
+
             messages = [{"role": "system", "content": prompt}]
-            
-            response = self.together_client.chat.completions.create(
+
+            response = openai.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens
             )
-            
-            sql = self._extract_sql(response.choices[0].message.content)
-            self._validate_sql(sql)
-            
-            self.last_generated_sql = sql
-            self.query_history.append({
-                'query': natural_query,
-                'sql': sql,
-                'timestamp': datetime.now()
-            })
-            
-            return sql
-            
+
+            raw_sql = response.choices[0].message.content
+            clean_sql = self._extract_sql(raw_sql)
+
+            if not clean_sql or "SELECT" not in clean_sql.upper():
+                raise ValueError("Réponse OpenAI ne contient pas de SQL valide")
+
+            self.last_generated_sql = clean_sql
+            return clean_sql
+
         except Exception as e:
-            logger.error(f"Erreur lors de la génération SQL: {str(e)}")
+            logger.error(f"Erreur génération SQL: {str(e)}")
             raise
 
-    def _build_prompt(self, query: str) -> str:
-        """Construit le prompt pour le modèle LLM"""
-        # Implémentez votre logique de construction de prompt ici
-        return f"Traduis cette question en SQL: {query}"
-
-    def _extract_sql(self, text: str) -> str:
-        """Extrait la requête SQL de la réponse du modèle"""
-        sql = re.sub(r'(?i)^\s*(?:--|#).*$', '', text, flags=re.MULTILINE)
-        sql = re.sub(r'(?:sql)?\s*([^`]+)', r'\1', text, flags=re.DOTALL)
+    def _extract_sql(self, text):
+        sql = re.sub(r'```(sql)?|```', '', text)
+        sql = re.sub(r'(?i)^\s*(?:--|#).*$', '', sql, flags=re.MULTILINE)
         return sql.strip().rstrip(';')
 
-    def _validate_sql(self, sql: str) -> bool:
-        """Valide la requête SQL générée"""
+    def _strip_db_prefix(self, table_name):
+        return table_name.split('.')[-1]
+
+    def _validate_sql(self, sql):
         sql_lower = sql.lower()
-        
-        # Vérification des commandes dangereuses
         forbidden = ['drop', 'delete', 'update', 'insert', ';--', 'exec']
         if any(cmd in sql_lower for cmd in forbidden):
             raise ValueError("Commande SQL dangereuse détectée")
-            
-        # Vérification que c'est une requête SELECT
-        if not re.match(r'^\s*select\s+', sql_lower):
-            raise ValueError("Seules les requêtes SELECT sont autorisées")
-            
+
+        used_tables = set(re.findall(r'\bfrom\s+([a-zA-Z0-9_.]+)|\bjoin\s+([a-zA-Z0-9_.]+)', sql_lower))
+        for table in (t for group in used_tables for t in group if t):
+            clean_table = self._strip_db_prefix(table)
+            if clean_table not in self.schema:
+                raise ValueError(f"Table inconnue: {table}")
         return True
 
-    def execute_query(self, sql: str, params=None) -> Dict[str, Any]:
-        """
-        Exécute une requête SQL et retourne les résultats.
-        
-        Args:
-            sql: Requête SQL à exécuter
-            params: Paramètres pour la requête
-            
-        Returns:
-            Dictionnaire contenant les résultats ou les erreurs
-        """
-        conn = None
-        cursor = None
-        
+    def execute_natural_query(self, natural_query):
         try:
-            conn = get_db()
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute(sql, params or ())
-            
-            if sql.strip().upper().startswith('SELECT'):
-                result = cursor.fetchall()
-                return {
-                    'success': True,
-                    'data': self._serialize_data(result)
-                }
-            else:
-                conn.commit()
-                return {
-                    'success': True,
-                    'affected_rows': cursor.rowcount
-                }
-                
+            sql = self.generate_sql(natural_query)
+            result = self.db.execute_query(sql)
+            if not result['success']:
+                corrected = self._auto_correct(sql, result['error'])
+                if corrected:
+                    result = self.db.execute_query(corrected)
+                    if result['success']:
+                        return self._format_results(result['data'], user_query=natural_query)
+                raise ValueError(f"Erreur SQL: {result['error']}")
+            return self._format_results(result['data'], user_query=natural_query)
         except Exception as e:
-            logger.error(f"Erreur SQL: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-            
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
+            logger.error(f"Erreur exécution: {str(e)}")
+            raise
 
-    def get_student_info_by_name(self, full_name: str) -> Optional[Dict[str, Any]]:
-        """Récupère les infos d'un élève à partir de son nom complet"""
+    def _auto_correct(self, bad_sql, error_msg):
         try:
-            # Séparation du nom et prénom
-            parts = full_name.split()
-            nom = parts[0] if len(parts) > 0 else ""
-            prenom = " ".join(parts[1:]) if len(parts) > 1 else ""
-            
-            conn = get_db()
-            cursor = conn.cursor(dictionary=True)
-            
+            correction_prompt = f"""
+Corrige cette requête SQL :
+Requête : {bad_sql}
+Erreur : {error_msg}
+Schéma disponible :
+{json.dumps(self.schema, indent=2)}
+"""
+            response = openai.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": correction_prompt}],
+                temperature=0,
+                max_tokens=500
+            )
+            corrected_sql = self._extract_sql(response.choices[0].message.content)
+            if self._validate_sql(corrected_sql):
+                return corrected_sql
+        except Exception as e:
+            logger.error(f"Correction échouée: {str(e)}")
+        return None
+
+    def detect_graph_type(self, user_query):
+        user_query = user_query.lower()
+        if any(k in user_query for k in ["pie", "camembert", "diagramme circulaire"]):
+            return "pie"
+        elif any(k in user_query for k in ["histogramme", "bar chart", "barres"]):
+            return "bar"
+        elif any(k in user_query for k in ["ligne", "line chart", "courbe"]):
+            return "line"
+        else:
+            return None
+
+    def extract_name_from_query(self, query):
+        pattern = r"attestation de\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)"
+        match = re.search(pattern, query, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    def get_student_info_by_name(self, full_name):
+        try:
             sql = """
             SELECT 
-                p.NomFr, p.PrenomFr, 
-                e.DateNaissance, 
-                IFNULL(e.LieuNaissance, e.AutreLieuNaissance) AS lieu_naissance,
-                c.CODECLASSEFR AS classe, 
+                ei.NomPrenomFr AS nom,
+                e.DateNaissance AS date_naissance,
+                IFNULL(e.LieuNaissance, e.AutreLieuNaissance) AS lieu_de_naissance,
+                ei.nomclassefr AS classe,
                 e.IdPersonne AS matricule
-            FROM eleve e
-            JOIN personne p ON e.IdPersonne = p.id
-            LEFT JOIN inscriptioneleve ie ON e.id = ie.Eleve
-            LEFT JOIN classe c ON ie.Classe = c.id
-            WHERE p.NomFr LIKE %s AND p.PrenomFr LIKE %s
-            LIMIT 1
+            FROM 
+                eleveinscri ei
+            JOIN 
+                eleve e ON ei.NomPrenomFr = %s
+            WHERE 
+                ei.NomPrenomFr = %s
+            LIMIT 1;
             """
-            
-            cursor.execute(sql, (f"%{nom}%", f"%{prenom}%"))
-            result = cursor.fetchone()
-            
-            if result:
-                logger.info(f"Élève trouvé : {result['NomFr']} {result['PrenomFr']}")
-            else:
-                logger.warning(f"Aucun élève trouvé pour : {full_name}")
-                
-            return result
-            
-        except Exception as e:
-            logger.error(f"Erreur recherche élève: {str(e)}")
-            return None
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
+            result = self.db.execute_query(sql, (full_name, full_name))
+            if not result['success'] or not result['data']:
+                return None
 
-    # if __name__ == "__main__":
-    #     # Exemple d'utilisation
-    #     agent = SQLAgent()
-    #     try:
-    #         sql = agent.generate_sql("Combien d'élèves en 4ème année ?")
-    #         result = agent.execute_query(sql)
-    #         print(result)
-    #     except Exception as e:
-    #         logger.error(f"Erreur: {str(e)}")
+            row = result['data'][0]
+            keys = ['nom', 'date_naissance', 'lieu_de_naissance', 'classe', 'matricule']
+            return dict(zip(keys, row)) if isinstance(row, (list, tuple)) else row
+
+        except Exception as e:
+            logger.error(f"Erreur get_student_info_by_name: {str(e)}")
+            return None
+
+
+
+
+
+    @staticmethod
+    def create_clean_graph(data_dict):
+        import matplotlib.pyplot as plt
+        import io
+        import base64
+
+        labels = list(data_dict.keys())
+        values = list(data_dict.values())
+
+        plt.figure(figsize=(10, max(6, len(labels) * 0.4)))
+        bars = plt.barh(labels, values, color='skyblue')
+
+        min_val = min(values)
+        max_val = max(values)
+        plt.xlim(max(0, min_val - 5), max_val + 5)
+
+        for bar, val in zip(bars, values):
+            plt.text(val + 1, bar.get_y() + bar.get_height() / 2,
+                    str(val), va='center', ha='left')
+
+        plt.title("Valeurs par catégorie")
+        plt.xlabel("Valeur")
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        buf.seek(0)
+
+        img_bytes = buf.read()
+        print(base64.b64encode(img_bytes).decode('utf-8'))
+
+        return base64.b64encode(img_bytes).decode('utf-8')
+
+
+
+    def generate_auto_graph(self, df, graph_type=None):
+        if df.empty or len(df.columns) < 2:
+            return None
+
+        plt.style.use('ggplot' if 'ggplot' in plt.style.available else 'default')
+        plt.rcParams['font.family'] = 'DejaVu Sans'
+        plt.rcParams['axes.unicode_minus'] = False
+
+        try:
+            # Colonnes à exclure (techniques ou non pertinentes)
+            exclude_cols = ['id', 'ids', 'anneescolaire', 'année scolaire', 'annee_scolaire']
+
+            # Colonnes numériques et catégorielles utiles
+            numeric_cols = [col for col in df.select_dtypes(include='number').columns if col.lower() not in exclude_cols]
+            categorical_cols = [col for col in df.select_dtypes(exclude='number').columns if col.lower() not in exclude_cols]
+
+            if not numeric_cols or not categorical_cols:
+                return None  # Besoin d'au moins une de chaque
+
+            # Choix des colonnes à afficher
+            y_col = numeric_cols[0]
+            x_col = categorical_cols[0]
+
+            df = df[[x_col, y_col]].dropna()
+            df = df.sort_values(by=y_col, ascending=False)
+
+            x = df[x_col].astype(str)
+            y = df[y_col].astype(float)
+
+            # Création du graphique (barres verticales)
+            fig, ax = plt.subplots(figsize=(max(8, len(df)*0.6), 6))
+
+            bars = ax.bar(x, y, color='skyblue')
+
+            # Affichage des valeurs au-dessus des barres
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2,
+                        height + max(y)*0.01,
+                        f'{int(height)}',
+                        ha='center', va='bottom', fontsize=9)
+
+            ax.set_xlabel(x_col)
+            ax.set_ylabel(y_col)
+            ax.set_title(f"{y_col} par {x_col}")
+            ax.grid(axis='y', linestyle='--', alpha=0.6)
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout(pad=2)
+
+            # Encodage en base64
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', dpi=120, bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            encoded = base64.b64encode(buf.read()).decode('utf-8')
+            buf.close()
+
+            return f"data:image/png;base64,{encoded}"
+
+        except Exception as e:
+            print(f"Erreur lors de la génération du graphique : {str(e)}")
+            return None
+
+
+    def _format_results(self, data, user_query=None):
+        serialized_data = self._serialize_data(data)
+        if not serialized_data:
+            return "Aucun résultat trouvé."
+
+        df = pd.DataFrame(serialized_data)
+
+        # Détection du type de graphique demandé dans la requête utilisateur
+        graph_type = None
+        if user_query:
+            graph_type = self.detect_graph_type(user_query)
+
+        # Logique existante avec passage de graph_type
+        if (len(df.columns) >= 2 and 
+            any('niveau' in col.lower() for col in df.columns) and 
+            any('inscription' in col.lower() for col in df.columns)):
+            return self.generate_auto_graph(df, graph_type=graph_type)
+        
+        if df.empty:
+            return "Aucun résultat trouvé."
+
+        if len(df) > 10 or len(df.select_dtypes(include='number').columns) > 1:
+            return self.generate_auto_graph(df, graph_type=graph_type)
+
+        return tabulate(df, headers='keys', tablefmt='github')
+
+
+    def get_response(self, user_query):
+        if "attestation de présence" in user_query.lower():
+            from pdf_utils.attestation import export_attestation_pdf
+            donnees_etudiant = {
+                "nom": "Rania Zahraoui",
+                "date_naissance": "15/03/2005",
+                "matricule": "2023A0512",
+                "etablissement": "Lycée Pilote de Sfax",
+                "classe": "3ème Sciences",
+                "annee_scolaire": "2024/2025",
+                "lieu": "Sfax"
+            }
+            pdf_path = export_attestation_pdf(donnees_etudiant)
+            return {
+                "response": f"L'attestation a été générée : <a href='/{pdf_path.replace(os.sep, '/')}' download>Télécharger le PDF</a>"
+            }
+
+        try:
+            query_tokens = self.count_tokens(user_query)
+            self.conversation_history.append({'role': 'user', 'content': user_query, 'tokens': query_tokens})
+
+            db_results = self.execute_natural_query(user_query)
+            if not db_results:
+                return {"response": "Aucun résultat."}
+
+            messages = [
+                {"role": "system", "content": "Tu es un assistant pédagogique. Reformule les résultats SQL bruts en réponse naturelle, utile et claire."},
+                {"role": "user", "content": f"Question: {user_query}\nRequête SQL générée: {self.last_generated_sql}\nRésultats:\n{json.dumps(db_results, ensure_ascii=False)[:800]}\n\nFormule une réponse claire et concise en français avec les données ci-dessus."}
+            ]
+
+            response = openai.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=400
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            response_tokens = self.count_tokens(response_text)
+            self.conversation_history.append({'role': 'assistant', 'content': response_text, 'tokens': response_tokens})
+            self._trim_history()
+
+            total_tokens = query_tokens + response_tokens
+            cost = total_tokens / 1000 * self.cost_per_1k_tokens
+
+            return {
+                "response": response_text,
+                "sql_query": self.last_generated_sql,
+                "results": db_results,
+                "tokens_used": total_tokens,
+                "cost_estimate": cost
+            }
+
+        except Exception as e:
+            logger.error(f"Erreur: {str(e)}", exc_info=True)
+            return {"response": "Une erreur est survenue lors du traitement de la requête."}
