@@ -16,7 +16,6 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-# Template pour les super admins (accès complet)
 ADMIN_PROMPT_TEMPLATE = PromptTemplate(
     input_variables=["input", "table_info", "relevant_domain_descriptions", "relations"],
     template=f"""
@@ -72,7 +71,7 @@ JOIN
 SELECT em.libematifr AS matiere ,ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre FROM
            Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e
            WHERE e.idedusrv=ed.idenelev and ed.codemati=em.codemati and
-           ex.codeperiexam=ed.codeperiexam  and  e.Idpersonne=(id_de la personne) and ed.moyemati not like '0.00' and ed.codeperiexam = ( id de la trimestre  ;
+           ex.codeperiexam=ed.codeperiexam  and  e.Idpersonne=(id_de la personne) and ed.moyemati not like '0.00' and ed.codeperiexam = ( id de la trimestre ) ;
 
 Voici la structure détaillée des tables pertinentes pour votre tâche (nom des tables, colonnes et leurs types) :
 {{table_info}}
@@ -98,7 +97,6 @@ Requête SQL :
 """
 )
 
-# Template pour les parents (accès restreint aux enfants)
 PARENT_PROMPT_TEMPLATE = PromptTemplate(
     input_variables=["input", "table_info", "relevant_domain_descriptions", "relations", "user_id", "children_ids"],
     template=f"""
@@ -119,34 +117,55 @@ FILTRES OBLIGATOIRES À APPLIQUER:
 - Pour les paiements: Filtrer par les élèves concernés
 - si la question contienne un id d'eleve différent de ({{children_ids}})) afficher un message d'erreur qui dit "vous n'avez pas le droit de voir les données de cet élève"
 -Si la question demande des statistiques , des nombres des shémas de l'ecole afficher un message d'erreur qui dit "des informations critiques"
-- si la question contienne un nom  d'eleve différent des enfants dont les id sont  ({{children_ids}})) afficher un message d'erreur qui dit "vous n'avez pas le droit de voir les données de cet élève"
-
+- si la question contienne un nom d'eleve différent des enfants dont les id sont ({{children_ids}})) afficher un message d'erreur qui dit "vous n'avez pas le droit de voir les données de cet élève"
 
 ATTENTION: 
-**l'année scolaire se trouve dans anneescolaire.AnneeScolaire non pas dans Annee 
-** si on dit l'annee XXXX/YYYY on parle de l'année scolaire XXXX/YYYY 
-**les table eleve et parent ne contienne pas les noms et les prenoms . ils se trouvent dans la table personne.
-**les table eleve et parent ne contienne pas les numéro de telephnone Tel1 et Tel2 . ils se trouvent dans la table personne.
-**les colonnes principale  du table personne sont : id, NomFr, PrenomFr, NomAr , PrenomAr, Cin,AdresseFr, AdresseAr, Tel1, Tel2,Nationalite,Localite,Civilite.
-**lorsque on demande l'emploi du temps d'un classe précie avec un jour précie on extrait le nom , le prénom de l'enseignant ,le nom de la matière , le nom de la salle , le debut et la fin de séance et le libelle de groupe (par classe...)
+**l'année scolaire se trouve dans anneescolaire.AnneeScolaire non pas dans Annee.
+** si on dit l'annee XXXX/YYYY on parle de l'année scolaire XXXX/YYYY. 
+**les table eleve et parent et enseingant ne contienne pas les noms et les prenoms . ils se trouvent dans la table personne.
+**les table eleve et parent et enseingant ne contienne pas les numéro de telephnone Tel1 et Tel2 . ils se trouvent dans la table personne.
+**les colonnes principale du table personne sont : id, NomFr, PrenomFr, NomAr , PrenomAr, Cin,AdresseFr, AdresseAr, Tel1, Tel2,Nationalite,Localite,Civilite.
+POUR L'EMPLOI DU TEMPS :la semaine A est d'id 2 , la semaine B est d'id 3 , Sans semaine d'id 1.
+** lorsque on ne précie pas la semaine faire la semaine d'id 1 sinon la semaine précisé.
+SELECT 
+    p.NomFr AS nom_enseignant,
+    p.PrenomFr AS prenom_enseignant,
+    m.NomMatiereFr AS nom_matiere,
+    s.nomSalleFr AS nom_salle,
+    sc1.debut AS debut_seance,
+    sc2.fin AS fin_seance,
+FROM
+    emploidutemps e
+JOIN
+    jour j ON e.Jour = j.id AND j.libelleJourFr = (jour)
+JOIN
+    semaine sm ON e.Semaine = sm.id AND sm.id = (id_semaine)
+JOIN
+    salle s ON e.Salle = s.id
+JOIN
+    enseingant en ON e.Enseignant = en.id
+JOIN
+    personne p ON en.idPersonne = p.id
+JOIN
+    matiere m ON e.Matiere = m.id
+JOIN
+    seance sc1 ON e.SeanceDebut = sc1.id
+JOIN
+    seance sc2 ON e.SeanceFin = sc2.id
+WHERE
+    e.Classe IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}}))));
+
+
 **la trimestre 3 est d id 33, trimestre 2 est d id 32 , trimestre 1 est d id 31.
 ** le table des enseignants s'appelle enseingant non pas enseignant. 
 ** le parametre du nom de la salle c'est nomSalleFr non NomSalle . 
-**lorsque on veut avoir l id d un eleve  on fait cette jointure : 
-id_inscription IN (
-        SELECT id
-        FROM inscriptioneleve
-        WHERE Eleve IN (
-            SELECT id
-            FROM eleve
-            WHERE IdPersonne IN ({{children_ids}})
-        )
-**lorsque on veut savoir l id de la séance on fait la jointure suivante : s.id=e.SeanceDebut  avec s pour la seance et e pour Emploidutemps 
-**lorsque on veut savoir le paiement extra d un eleve on extrait le motif_paiement, le totalTTC  et le reste en faisant  la jointure entre le paiementextra et paiementextradetails d'une coté et paiementextra et paiementmotif d'une autre coté .
-**lorsque on demande les détails de paiement scolaire on extrait le mode de reglement ,numéro de chèque , montant et la date de l'opération. 
-**Les coordonées de debut et de la fin de séance se trouve dans le table emploidutemps sous forme d'id ,les covertir en heures a l'aide de table seance . 
+** la note de l'eleve par matière se trouve dans la table Noteeleveparmatiere
+** le devoir de controle s'applle dc dans la table Noteeleveparmatiere , avec dc1 devoir de controle 1, dc2 devoir de controle 2 .
+** l'examen s'applle ds dans la table Noteeleveparmatiere.
+** le note d'orale s'appelle orale dans la table Noteeleveparmatiere.
+** le nom de matière se trouve dans la table Matiere dans la colonne Nommatierefr.
 **la semaine A est d'id 2 , la semaine B est d'id 3 , Sans semaine d'id 1.
-**pour les nom de jour en français on a une colone libelleJourFr avec mercredi c est ecrite Mercredi . 
+**pour les nom de jour en français on a une colone libelleJourFr avec mercredi c'est ecrite Mercredi . 
 **utiliser des JOINs explicites . exemple au lieu de :WHERE
     e.Classe = (SELECT id FROM classe WHERE CODECLASSEFR = '7B2')
     AND e.Jour = (SELECT id FROM jour WHERE libelleJourFr = 'Mercredi')
@@ -155,18 +174,17 @@ id_inscription IN (
      jour j ON e.Jour = j.id AND j.libelleJourFr = 'Mercredi'
 JOIN
      classe c ON e.Classe = c.id AND c.CODECLASSEFR = '7B2'
+** lorsque on veut savoir l id de l'eleve :  eleve.Idpersonne IN ({{children_ids}})
+** lorsque on veut chercher la classe de l'eleve on fait : idClasse IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}}))))
+** lorsque on veut savoir la repartion des examens on l'extrait par nom de matiere , data , heure de debeut , heure de fin et la salle .
+** l'examen est de TypeExamen = 2 dans la table repartitionexamen.
 **les résultats des trimestres se trouve dans le table Eduresultatcopie .
 ** le nom de matière dans la table edumatiere est libematifr non pas NomMatiereFr .
-**l id de l eleve est liée par l id de la personne par Idpersonne  
+**l id de l eleve est liée par l id de la personne par Idpersonne.  
 **pour les CODECLASSEFR on met la classe entre guemets . exemple :CODECLASSEFR = '8B2'
 ** pour l'etat de paiement on n'a pas une colone qui s'appelle MontatTTC dans le table paiement et on donne seulement la tranche , le TotalTTC, le MontantRestant du tableau paiement.
+** lorsque on demande les paiements on extrait les paiements normaux et les paiements extra.Pour les paiements extra ont extrait le Libelle du table paiementmotif et TotalTTC, MontantRestant paiementextra. 
 ** lorsque on demande le nombre d'abscences par matière on donne le nom de la matière non pas son id .
-**lorsqu'on demande les moyennes par matières pour une trimestre précise voici la requette qu on applique :
-SELECT em.libematifr AS matiere ,ed.moyemati AS moyenne, ex.codeperiexam AS codeTrimestre FROM
-           Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e
-           WHERE e.idedusrv=ed.idenelev and ed.codemati=em.codemati and
-           ex.codeperiexam=ed.codeperiexam  and  e.Idpersonne IN ({{children_ids}}) and ed.moyemati not like '0.00' and ed.codeperiexam = ( id de la trimestre  ;
-
 Voici la structure détaillée des tables pertinentes pour votre tâche (nom des tables, colonnes et leurs types) :
 {{table_info}}
 
@@ -303,7 +321,11 @@ class SQLAssistant:
                 f"e.idpersonne={child_id}",
                 f"eleve.idpersonne = {child_id}",
                 f"eleve.idpersonne={child_id}",
-                f"idpersonne in ({child_id})"
+                f"idpersonne in ({child_id})",
+                f"eleve = ({child_id})",
+                f"Eleve = ({child_id})",
+                f"eleve = {child_id}",
+                f"Eleve = {child_id}"
             })
         else:
             ids_joined = ",".join(children_ids_str)
@@ -333,7 +355,11 @@ class SQLAssistant:
                 f"exists(select 1 from eleve where idpersonne = {child_id}",
                 f"exists(select 1 from eleve where idpersonne={child_id}",
                 f"ed.idenelev IN (SELECT id FROM eleve WHERE IdPersonne IN {child_id})",
-                f"e.idpersonne in ({child_id})"
+                f"e.idpersonne in ({child_id})",
+                f"eleve = ({child_id})",
+                f"Eleve = ({child_id})",
+                f"eleve = {child_id}",
+                f"Eleve = {child_id}"
             })
         
         # Pour les listes d'IDs
@@ -410,7 +436,6 @@ class SQLAssistant:
     def _process_admin_question(self, question: str) -> tuple[str, str]:
         """Traite une question avec accès admin complet"""
         
-        # 1. Vérifier le cache
         cached = self.cache.get_cached_query(question)
         if cached:
             sql_template, variables = cached
@@ -442,10 +467,25 @@ class SQLAssistant:
         
         # 3. Génération via LLM (template admin)
         print("🔍 Génération LLM pour admin")
+        relevant_domains = self.get_relevant_domains(question, self.domain_descriptions)
+        if relevant_domains:
+            # 2. Tables associées
+            relevant_tables = self.get_tables_from_domains(relevant_domains, self.domain_to_tables_mapping)
+            # 3. Structure SQL réduite
+            table_info = self.db.get_table_info(relevant_tables)
+            # 4. Descriptions réduites
+            relevant_domain_descriptions = "\n".join(
+                f"{dom}: {self.domain_descriptions[dom]}" for dom in relevant_domains if dom in self.domain_descriptions
+            )
+        else:
+            # fallback : tout injecter si rien trouvé
+            table_info = self.db.get_table_info()
+            relevant_domain_descriptions = "\n".join(self.domain_descriptions.values())
+
         prompt = ADMIN_PROMPT_TEMPLATE.format(
             input=question,
             table_info=self.db.get_table_info(),
-            relevant_domain_descriptions="\n".join(self.domain_descriptions.values()),
+            relevant_domain_descriptions=relevant_domain_descriptions,
             relations=self.relations_description
         )
 
@@ -490,16 +530,29 @@ class SQLAssistant:
         # Génération via LLM avec template parent
         children_ids_str = ','.join(map(str, children_ids))
         
+        relevant_domains = self.get_relevant_domains(question, self.domain_descriptions)
+        if relevant_domains:
+            # 2. Tables associées
+            relevant_tables = self.get_tables_from_domains(relevant_domains, self.domain_to_tables_mapping)
+            # 3. Structure SQL réduite
+            table_info = self.db.get_table_info(relevant_tables)
+            # 4. Descriptions réduites
+            relevant_domain_descriptions = "\n".join(
+                f"{dom}: {self.domain_descriptions[dom]}" for dom in relevant_domains if dom in self.domain_descriptions
+            )
+        else:
+            # fallback : tout injecter si rien trouvé
+            table_info = self.db.get_table_info()
+            relevant_domain_descriptions = "\n".join(self.domain_descriptions.values())
 
         prompt = PARENT_PROMPT_TEMPLATE.format(
             input=question,
             table_info=self.db.get_table_info(),
-            relevant_domain_descriptions="\n".join(self.domain_descriptions.values()),
+            relevant_domain_descriptions=relevant_domain_descriptions,
             relations=self.relations_description,
             user_id=user_id,
             children_ids=children_ids_str
         )
-
         llm_response = self.ask_llm(prompt)
         sql_query = llm_response.replace("```sql", "").replace("```", "").strip()
         
@@ -644,6 +697,7 @@ class SQLAssistant:
             
             if domain_names.lower() == 'none' or not domain_names:
                 return []
+            print("domain_récupérer")
             return [d.strip() for d in domain_names.split(',')]
         except Exception as e:
             print(f"❌ Erreur lors de l'identification des domaines: {e}")
@@ -656,6 +710,75 @@ class SQLAssistant:
             tables.extend(domain_to_tables_map.get(domain, []))
         return sorted(list(set(tables)))
 
+
+    def _safe_load_relations(self) -> str:
+        """Charge les relations avec gestion d'erreurs"""
+        try:
+            relations_path = Path(__file__).parent / 'prompts' / 'relations.txt'
+            if relations_path.exists():
+                return relations_path.read_text(encoding='utf-8')
+            print("⚠️ Fichier relations.txt non trouvé, utilisation valeur par défaut")
+            return "# Aucune relation définie"
+        except Exception as e:
+            print(f"❌ Erreur chargement relations: {e}")
+            return "# Erreur chargement relations"
+    
+    def _safe_load_domain_descriptions(self) -> dict:
+        """Charge les descriptions de domaine avec gestion d'erreurs"""
+        try:
+            domain_path = Path(__file__).parent / 'prompts' / 'domain_descriptions.json'
+            if domain_path.exists():
+                with open(domain_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            print("⚠️ Fichier domain_descriptions.json non trouvé")
+            return {}
+        except Exception as e:
+            print(f"❌ Erreur chargement domain descriptions: {e}")
+            return {}
+    
+    def _safe_load_domain_to_tables_mapping(self) -> dict:
+        """Charge le mapping domaine-tables avec gestion d'erreurs"""
+        try:
+            mapping_path = Path(__file__).parent / 'prompts' / 'domain_tables_mapping.json'
+            if mapping_path.exists():
+                with open(mapping_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            print("⚠️ Fichier domain_tables_mapping.json non trouvé")
+            return {}
+        except Exception as e:
+            print(f"❌ Erreur chargement domain mapping: {e}")
+            return {}
+    
+    def _safe_load_question_templates(self) -> list:
+
+        """Charge les templates avec gestion d'erreurs robuste"""
+        try:
+            templates_path = Path(__file__).parent / 'templates_questions.json'
+            
+            if not templates_path.exists():
+                print(f"⚠️ Création fichier templates: {templates_path}")
+                templates_path.write_text('{"questions": []}', encoding='utf-8')
+                return []
+
+            content = templates_path.read_text(encoding='utf-8').strip()
+            if not content:
+                return []
+
+            data = json.loads(content)
+            if not isinstance(data.get("questions", []), list):
+                return []
+            
+            valid_templates = []
+            for template in data["questions"]:
+                if all(key in template for key in ["template_question", "requete_template"]):
+                    valid_templates.append(template)
+            
+            return valid_templates
+
+        except Exception as e:
+            print(f"❌ Erreur chargement templates: {e}")
+            return []
+        
     def format_result(self, result: str, question: str = "") -> str:
         """
         Formate les résultats SQL bruts en une table lisible
@@ -705,69 +828,29 @@ class SQLAssistant:
         except Exception as e:
             return f"❌ Erreur de formatage: {str(e)}\nRésultat brut:\n{result}"
 
-    def _safe_load_relations(self) -> str:
-        """Charge les relations avec gestion d'erreurs"""
-        try:
-            relations_path = Path(__file__).parent / 'prompts' / 'relations.txt'
-            if relations_path.exists():
-                return relations_path.read_text(encoding='utf-8')
-            print("⚠️ Fichier relations.txt non trouvé, utilisation valeur par défaut")
-            return "# Aucune relation définie"
-        except Exception as e:
-            print(f"❌ Erreur chargement relations: {e}")
-            return "# Erreur chargement relations"
-    
-    def _safe_load_domain_descriptions(self) -> dict:
-        """Charge les descriptions de domaine avec gestion d'erreurs"""
-        try:
-            domain_path = Path(__file__).parent / 'prompts' / 'domain_descriptions.json'
-            if domain_path.exists():
-                with open(domain_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            print("⚠️ Fichier domain_descriptions.json non trouvé")
-            return {}
-        except Exception as e:
-            print(f"❌ Erreur chargement domain descriptions: {e}")
-            return {}
-    
-    def _safe_load_domain_to_tables_mapping(self) -> dict:
-        """Charge le mapping domaine-tables avec gestion d'erreurs"""
-        try:
-            mapping_path = Path(__file__).parent / 'prompts' / 'domain_tables_mapping.json'
-            if mapping_path.exists():
-                with open(mapping_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            print("⚠️ Fichier domain_tables_mapping.json non trouvé")
-            return {}
-        except Exception as e:
-            print(f"❌ Erreur chargement domain mapping: {e}")
-            return {}
-    
-    def _safe_load_question_templates(self) -> list:
-        """Charge les templates avec gestion d'erreurs robuste"""
-        try:
-            templates_path = Path(__file__).parent / 'templates_questions.json'
-            
-            if not templates_path.exists():
-                print(f"⚠️ Création fichier templates: {templates_path}")
-                templates_path.write_text('{"questions": []}', encoding='utf-8')
-                return []
-
-            content = templates_path.read_text(encoding='utf-8').strip()
-            if not content:
-                return []
-
-            data = json.loads(content)
-            if not isinstance(data.get("questions", []), list):
-                return []
-            
-            valid_templates = []
-            for template in data["questions"]:
-                if all(key in template for key in ["template_question", "requete_template"]):
-                    valid_templates.append(template)
-            
-            return valid_templates
-
-        except Exception as e:
-            print(f"❌ Erreur chargement templates: {e}")
-            return []
+   
+        """Formate les données tabulaires (ancien format avec pipes)"""
+        headers = [h.strip() for h in lines[0].split('|')]
+        rows = []
+        
+        for line in lines[1:]:
+            row = [cell.strip() for cell in line.split('|')]
+            rows.append(row)
+        
+        formatted = []
+        if question:
+            formatted.append(f"Résultats pour: {question}\n")
+        
+        # En-tête
+        header_line = " | ".join(headers)
+        formatted.append(header_line)
+        
+        # Séparateur
+        separator = "-+-".join(['-' * len(h) for h in headers])
+        formatted.append(separator)
+        
+        # Données
+        for row in rows:
+            formatted.append(" | ".join(row))
+        
+        return "\n".join(formatted)

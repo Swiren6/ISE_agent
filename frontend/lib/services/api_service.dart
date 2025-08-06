@@ -110,7 +110,7 @@ class ApiService {
             headers: headers,
             body: body, // Essayez aussi: alternativeBody
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 50));
 
       print('📥 Response status: ${response.statusCode}');
       print('📥 Response headers: ${response.headers}');

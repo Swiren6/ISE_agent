@@ -61,25 +61,6 @@ def create_direct_connection():
         logger.error(f"❌ Erreur connexion MySQL directe: {e}")
         return None
 
-# def get_db():
-#     """Retourne la connexion MySQL - utilise d'abord Flask, puis connexion directe"""
-#     try:
-#         # ✅ Essayer d'abord la connexion Flask
-#         from flask import current_app
-#         if current_app and hasattr(mysql, 'connection') and mysql.connection:
-#             # Test rapide de la connexion Flask
-#             cursor = mysql.connection.cursor()
-#             cursor.execute("SELECT 1")
-#             cursor.close()
-#             logger.debug("✅ Connexion Flask MySQL OK")
-#             return mysql.connection
-#     except Exception as e:
-#         logger.warning(f"⚠️ Connexion Flask MySQL échouée: {e}")
-    
-#     # ✅ Fallback vers connexion directe
-#     logger.info("🔄 Utilisation connexion MySQL directe")
-#     return create_direct_connection()
-
 def get_db():
     """Returns a MySQL connection - uses Flask connection if available, otherwise creates a direct connection"""
     try:
