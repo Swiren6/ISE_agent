@@ -11,10 +11,6 @@
     "question_template": "donne moi les dates et les durée et les matieres de retards effectué par {family_relation}",
     "sql_template": "SELECT r.Date, r.Duree, m.NomMatiereFr \nFROM retard r \nJOIN matiere m ON r.Matiere = m.id \nWHERE r.Inscription IN (SELECT id FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne})));"
   },
-  "437fb0033da5b7276ee9adcb906a254e": {
-    "question_template": "donne moi la repartion des examens pour {family_relation} de la {codeperiexam} pour les examens",
-    "sql_template": "SELECT \n    m.NomMatiereFr, \n    re.date, \n    re.heureDeb AS HeureDebut, \n    re.heureFin AS HeureFin, \n    s.nomSalleFr AS Salle\nFROM \n    repartitionexamen re\nJOIN \n    matiere m ON re.idMatiere = m.id\nJOIN \n    salle s ON re.idSalle = s.id\nWHERE \n    re.idTrimestre = {codeperiexam} \n    AND re.idClasse IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))));"
-  },
   "e204ea26eb6f15217756f6b77a746fe5": {
     "question_template": "donne moi les paiement effectuée pour {family_relation}",
     "sql_template": "SELECT p.*, pm.Libelle AS MotifPaiement\nFROM paiement p\nJOIN paiementmotif pm ON p.MotifPaiement = pm.id\nWHERE p.Inscription IN (SELECT id FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne})));"
@@ -22,5 +18,25 @@
   "3be6aa64b85c6f6fbfd1279c4a184867": {
     "question_template": "donne moi l emploi du temps pour {family_relation} pour {jour}",
     "sql_template": "SELECT \n    p.NomFr AS nom_enseignant,\n    p.PrenomFr AS prenom_enseignant,\n    m.NomMatiereFr AS nom_matiere,\n    s.nomSalleFr AS nom_salle,\n    sc1.debut AS debut_seance,\n    sc2.fin AS fin_seance\nFROM\n    emploidutemps e\nJOIN\n    jour j ON e.Jour = j.id AND j.libelleJourFr = {jour}\nJOIN\n    semaine sm ON e.Semaine = sm.id AND sm.id = 1\nJOIN\n    salle s ON e.Salle = s.id\nJOIN\n    enseingant en ON e.Enseignant = en.id\nJOIN\n    personne p ON en.idPersonne = p.id\nJOIN\n    matiere m ON e.Matiere = m.id\nJOIN\n    seance sc1 ON e.SeanceDebut = sc1.id\nJOIN\n    seance sc2 ON e.SeanceFin = sc2.id\nWHERE\n    e.Classe IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))));"
+  },
+  "46c32f1e997dcd81b1adaa3e418e0792": {
+    "question_template": "donne moi le nombre des absences par matière pour {family_relation}",
+    "sql_template": "SELECT \n    m.NomMatiereFr AS nom_matiere,\n    COUNT(a.id) AS nombre_absences\nFROM \n    absence a\nJOIN \n    matiere m ON a.Matiere = m.id\nJOIN \n    inscriptioneleve ie ON a.Inscription = ie.id\nWHERE \n    ie.Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))\nGROUP BY \n    m.NomMatiereFr;"
+  },
+  "9183ee1bcedb3088d30282e54d66f94b": {
+    "question_template": "pour {family_relation} donne moi le nombre d'abscence par matière pour l'année scolaire {AnneeScolaire}",
+    "sql_template": "SELECT \n    m.NomMatiereFr AS nom_matiere,\n    COUNT(a.id) AS nombre_absences\nFROM \n    absence a\nJOIN \n    matiere m ON a.Matiere = m.id\nJOIN \n    inscriptioneleve ie ON a.Inscription = ie.id\nWHERE \n    ie.Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))\n    AND a.anneeSco = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}')\nGROUP BY \n    m.NomMatiereFr;"
+  },
+  "3c017180c1a757f39ad55fdac40aa7da": {
+    "question_template": "donne moi la note de devoir de synthese en {matiere} pour {codeperiexam} pour {family_relation}",
+    "sql_template": "SELECT DISTINCT n.ds AS note_devoir_synthese\nFROM noteeleveparmatiere n\nJOIN inscriptioneleve ie ON n.id_inscription = ie.id\nWHERE ie.Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))\nAND n.id_matiere = (SELECT id FROM matiere WHERE NomMatiereFr = '{matiere}')\nAND n.id_trimestre = {codeperiexam};"
+  },
+  "42d53f0aaaf70ff95bc8a4083170a93d": {
+    "question_template": "donne moi la répartition des devoirs de control pour la {codeperiexam} pour {family_relation}",
+    "sql_template": "SELECT \n    m.NomMatiereFr AS nom_matiere,\n    re.date AS date_examen,\n    re.heureDeb AS heure_debut,\n    re.heureFin AS heure_fin,\n    re.idSalle AS id_salle\nFROM \n    repartitionexamen re\nJOIN \n    matiere m ON re.idMatiere = m.id\nWHERE \n    re.idClasse IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))))\n    AND re.TypeExamen = 1\n    AND re.idTrimestre = {codeperiexam};"
+  },
+  "d9a8b772337dde9847b06af14bd9dec2": {
+    "question_template": "donne moi la repartition de devoirs de synthèse pour {codeperiexam} pour {family_relation}",
+    "sql_template": "SELECT \n    m.NomMatiereFr AS nom_matiere,\n    re.date AS date_examen,\n    re.heureDeb AS heure_debut,\n    re.heureFin AS heure_fin,\n    re.idSalle AS id_salle\nFROM \n    repartitionexamen re\nJOIN \n    matiere m ON re.idMatiere = m.id\nWHERE \n    re.idTrimestre = {codeperiexam} \n    AND re.TypeExamen = 2\n    AND re.idClasse IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({id_personne}))));"
   }
 }

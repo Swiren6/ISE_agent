@@ -16,7 +16,6 @@ class CacheManager1:
     def __init__(self, cache_file: str = "sql_query_cache1.json"):
         self.cache_file = Path(cache_file)
         self.cache = self._load_cache()
-
         
         # Patterns de base pour les valeurs structurées
         self.auto_patterns = {

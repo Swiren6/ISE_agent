@@ -98,7 +98,7 @@ Requête SQL :
 )
 
 PARENT_PROMPT_TEMPLATE = PromptTemplate(
-    input_variables=["input", "table_info", "relevant_domain_descriptions", "relations", "user_id", "children_ids"],
+    input_variables=["input", "table_info", "relevant_domain_descriptions", "relations", "user_id", "children_ids","children_names"],
     template=f"""
 [SYSTEM] Vous êtes un assistant SQL expert pour une base de données scolaire.
 Votre rôle est de traduire des questions en français en requêtes SQL MySQL.
@@ -107,6 +107,7 @@ ACCÈS: PARENT - Accès limité aux données de vos enfants uniquement.
 RESTRICTIONS DE SÉCURITÉ:
 - VOUS NE POUVEZ ACCÉDER QU'AUX DONNÉES DES ÉLÈVES AVEC LES IDs: {{children_ids}}
 - VOTRE ID PARENT EST: {{user_id}}
+-LES NOMS DES ENFANTS DE CHAQUE PARENT SONT {{children_names}}
 - TOUTE REQUÊTE DOIT INCLURE UN FILTRE SUR CES IDs D'ÉLÈVES
 - VOUS NE POUVEZ PAS VOIR LES DONNÉES D'AUTRES ÉLÈVES OU PARENTS
 
@@ -117,14 +118,44 @@ FILTRES OBLIGATOIRES À APPLIQUER:
 - Pour les paiements: Filtrer par les élèves concernés
 - si la question contienne un id d'eleve différent de ({{children_ids}})) afficher un message d'erreur qui dit "vous n'avez pas le droit de voir les données de cet élève"
 -Si la question demande des statistiques , des nombres des shémas de l'ecole afficher un message d'erreur qui dit "des informations critiques"
-- si la question contienne un nom d'eleve différent des enfants dont les id sont ({{children_ids}})) afficher un message d'erreur qui dit "vous n'avez pas le droit de voir les données de cet élève"
+- si la question contienne un nom d'eleve différent de ({{children_names}})) afficher un message d'erreur qui dit "vous n'avez pas le droit de voir les données de cet élève"
+-SI la question ne contient pas des mots tels que mon enfant ma fille mon garçon ... génère automatiquement la requette pour l'enfant de ce parent. 
+- si la question contienne un nom de ({{children_names}}) accepte la et la gère selon ce nom.
 
+REMARQUE IMPORTANTE:
+-SI le parent précise le prenom de son enfant on ajoute ce filtre personne.PrenomFr=(nom de l'enfant) avec nom de l'enfant doit etre dans ({{children_names}})).
+
+PARENT AVEC PLUS QU'UN ENFANT:
+- pour l'actualité on extrait seulement le titre, descriptionCourte et la descriptionLong du table actualite1.
+- SI UN PARENT A PLUS QU'UN enfant on repond basé sur la question : si il a une fille et un garçon et il dit 'mon garçon' on extrait seulement les informations du garçon .SI il dit mon enfant sans préciser le genre on lui demande de préciser de quelle enfant parle il . 
+-Si il dit mon grand enfant on extrait les informations de l'enfant le plus agé . si il dit mon petit on extrait les informations de l'enfant le plus petit.
+-SI le parent précise le nom de l'enfant on extrait seulement ce qui conserne cette enfant.
 ATTENTION: 
 **l'année scolaire se trouve dans anneescolaire.AnneeScolaire non pas dans Annee.
 ** si on dit l'annee XXXX/YYYY on parle de l'année scolaire XXXX/YYYY. 
 **les table eleve et parent et enseingant ne contienne pas les noms et les prenoms . ils se trouvent dans la table personne.
 **les table eleve et parent et enseingant ne contienne pas les numéro de telephnone Tel1 et Tel2 . ils se trouvent dans la table personne.
 **les colonnes principale du table personne sont : id, NomFr, PrenomFr, NomAr , PrenomAr, Cin,AdresseFr, AdresseAr, Tel1, Tel2,Nationalite,Localite,Civilite.
+**la trimestre 3 est d id 33, trimestre 2 est d id 32 , trimestre 1 est d id 31.
+** le table des enseignants s'appelle enseingant non pas enseignant. 
+**l id de l eleve est liée par l id de la personne par Idpersonne.  
+**pour les CODECLASSEFR on met la classe entre guemets . exemple :CODECLASSEFR = '8B2'.
+** le parametre du nom de la salle c'est nomSalleFr non NomSalle . 
+** le nom de matière se trouve dans la table Matiere dans la colonne Nommatierefr.
+**pour les nom de jour en français on a une colone libelleJourFr avec mercredi c'est ecrite Mercredi . 
+**utiliser des JOINs explicites . exemple au lieu de :WHERE
+    e.Classe = (SELECT id FROM classe WHERE CODECLASSEFR = '7B2')
+    AND e.Jour = (SELECT id FROM jour WHERE libelleJourFr = 'Mercredi')
+    ecrire:
+ JOIN
+     jour j ON e.Jour = j.id AND j.libelleJourFr = 'Mercredi'
+JOIN
+     classe c ON e.Classe = c.id AND c.CODECLASSEFR = '7B2'
+** lorsque on veut savoir l id de l'eleve :  eleve.Idpersonne IN ({{children_ids}})
+** lorsque on veut chercher la classe de l'eleve on fait : idClasse IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}}))))
+** le nom de matière dans la table edumatiere est libematifr non pas NomMatiereFr .
+** la matière mathématique s'appelle Maths dans la table matiere. 
+
 POUR L'EMPLOI DU TEMPS :la semaine A est d'id 2 , la semaine B est d'id 3 , Sans semaine d'id 1.
 ** lorsque on ne précie pas la semaine faire la semaine d'id 1 sinon la semaine précisé.
 SELECT 
@@ -155,36 +186,56 @@ JOIN
 WHERE
     e.Classe IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}}))));
 
+PAIEMENT:
+** pour l'etat de paiement on n'a pas une colone qui s'appelle MontatTTC dans le table paiement et on donne seulement la tranche , le TotalTTC, le MontantRestant du tableau paiement . pas de MotifPaiement
+** Pour les paiements extra ont extrait seulement : la Libelle du table paiementmotif et TotalTTC, MontantRestant du table paiementextra. NI TauxRemise,TotalRemise,NetHT,TauxTVA,TotalTVA,id.
 
-**la trimestre 3 est d id 33, trimestre 2 est d id 32 , trimestre 1 est d id 31.
-** le table des enseignants s'appelle enseingant non pas enseignant. 
-** le parametre du nom de la salle c'est nomSalleFr non NomSalle . 
-** la note de l'eleve par matière se trouve dans la table Noteeleveparmatiere
-** le devoir de controle s'applle dc dans la table Noteeleveparmatiere , avec dc1 devoir de controle 1, dc2 devoir de controle 2 .
-** l'examen s'applle ds dans la table Noteeleveparmatiere.
-** le note d'orale s'appelle orale dans la table Noteeleveparmatiere.
-** le nom de matière se trouve dans la table Matiere dans la colonne Nommatierefr.
-**la semaine A est d'id 2 , la semaine B est d'id 3 , Sans semaine d'id 1.
-**pour les nom de jour en français on a une colone libelleJourFr avec mercredi c'est ecrite Mercredi . 
-**utiliser des JOINs explicites . exemple au lieu de :WHERE
-    e.Classe = (SELECT id FROM classe WHERE CODECLASSEFR = '7B2')
-    AND e.Jour = (SELECT id FROM jour WHERE libelleJourFr = 'Mercredi')
-    ecrire:
- JOIN
-     jour j ON e.Jour = j.id AND j.libelleJourFr = 'Mercredi'
-JOIN
-     classe c ON e.Classe = c.id AND c.CODECLASSEFR = '7B2'
-** lorsque on veut savoir l id de l'eleve :  eleve.Idpersonne IN ({{children_ids}})
-** lorsque on veut chercher la classe de l'eleve on fait : idClasse IN (SELECT id FROM classe WHERE id IN (SELECT Classe FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}}))))
+NOTE DES DEVOIRS:
+lorsque on demande une note on fait : 
+        SELECT DISTINCT n.(code de devoir) AS note_devoir_controle
+        FROM noteeleveparmatiere n
+        JOIN inscriptioneleve ie ON n.id_inscription = ie.id
+        WHERE ie.Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}}))
+        AND n.id_matiere = (SELECT id FROM matiere WHERE NomMatiereFr = (nom_de_matière))
+        AND n.id_trimestre = (id_trimestre);
+lorsque on demande une note d'un enfant précie:
+        SELECT DISTINCT n.dc1 AS note_devoir_controle
+        FROM noteeleveparmatiere n, inscriptioneleve ie, personne p, eleve e
+        WHERE n.id_inscription = ie.id 
+        AND ie.Eleve = e.id
+        AND e.IdPersonne = p.id
+        AND e.IdPersonne IN ({{children_ids}})
+        AND p.PrenomFr = '(nom de l'enfant)'
+        AND n.id_matiere = (SELECT id FROM matiere WHERE NomMatiereFr = '(nom de matière)')
+        AND n.id_trimestre = 33;
+** si on demande les notes d'une matière sont précision on fait  SELECT DISTINCT n.Orale, n.dc1, n.ds.
+**Pour le maths SELECT DISTINCT n.dc1, n.dc2, n.ds .
+** le devoir de controle s'appelle dc1 dans la table Noteeleveparmatiere .
+** le devoir de controle ne s'appelle pas orale ni Orale dans la table Noteeleveparmatiere .
+** le devoir de controle 2 s'appelle dc2.
+** la note d'orale s'appelle orale.
+** le devoir de synthese s'applle ds dans la table Noteeleveparmatiere.
+** lorsque on veut avoir l'id de l'eleve du tableau eduresultatcopie on doit faire cette condition: WHERE eleve.idedusrv=Eduresultatcopie.idenelev. 
+** pour avoir l id de l'eleve du table noteeleveparmatiere on fait: WHERE noteeleveparmatiere.id_inscription IN (SELECT id FROM inscriptioneleve WHERE Eleve IN (SELECT id FROM eleve WHERE IdPersonne IN ({{children_ids}})));
+** lorsque on demande la moyenne d'une matière en fait ça :
+SELECT ed.moyemati AS moyenne FROM
+           Eduperiexam ex, Edumoymaticopie ed, Edumatiere em, Eleve e
+           WHERE e.idedusrv=ed.idenelev and ed.codemati=em.codemati and
+           ex.codeperiexam=ed.codeperiexam  and  e.Idpersonne IN ({{children_ids}})) and ed.moyemati not like '0.00' and ed.codeperiexam = (id_trimestre) and libematifr=(nom de matière);
+REPARTITION D'EXAMEN
 ** lorsque on veut savoir la repartion des examens on l'extrait par nom de matiere , data , heure de debeut , heure de fin et la salle .
 ** l'examen est de TypeExamen = 2 dans la table repartitionexamen.
-**les résultats des trimestres se trouve dans le table Eduresultatcopie .
-** le nom de matière dans la table edumatiere est libematifr non pas NomMatiereFr .
-**l id de l eleve est liée par l id de la personne par Idpersonne.  
-**pour les CODECLASSEFR on met la classe entre guemets . exemple :CODECLASSEFR = '8B2'
-** pour l'etat de paiement on n'a pas une colone qui s'appelle MontatTTC dans le table paiement et on donne seulement la tranche , le TotalTTC, le MontantRestant du tableau paiement.
-** lorsque on demande les paiements on extrait les paiements normaux et les paiements extra.Pour les paiements extra ont extrait le Libelle du table paiementmotif et TotalTTC, MontantRestant paiementextra. 
+** les devoirs de controle est de TypeExamen = 1 dans la table repartitionexamen.
+ABSENCE:
 ** lorsque on demande le nombre d'abscences par matière on donne le nom de la matière non pas son id .
+MOYENNE TRIMESTRIELLES ET ANNUELLE:
+**les résultats des trimestres se trouve dans le table Eduresultatcopie.
+**Pour extraire la moyenne trimestrielle d une trimestre précise on fait cette requette:
+SELECT er.moyeperiexam AS moyenneTrimestrielle
+        FROM Eleve e, Eduresultatcopie er
+        WHERE e.idedusrv=er.idenelev and e.Idpersonne IN ({{children_ids}})) and er.codeperiexam = (id_trimestre) ;
+
+
 Voici la structure détaillée des tables pertinentes pour votre tâche (nom des tables, colonnes et leurs types) :
 {{table_info}}
 
@@ -233,16 +284,16 @@ class SQLAssistant:
             print(f"❌ Erreur de chargement des templates: {str(e)}")
             self.templates_questions = []
 
-
-    def get_user_children_ids(self, user_id: int) -> List[int]:
-        """Récupère les IDs des enfants d'un parent avec gestion robuste des connexions"""
+    def get_user_children_data(self, user_id: int) -> Tuple[List[int], List[str]]:
+    
         connection = None
         cursor = None
         children_ids = []
+        children_prenoms = []
 
         try:
             query = """
-            SELECT DISTINCT pe.id AS id_enfant
+            SELECT DISTINCT pe.id AS id_enfant, pe.PrenomFr AS prenom
             FROM personne p
             JOIN parent pa ON p.id = pa.Personne
             JOIN parenteleve pev ON pa.id = pev.Parent
@@ -251,41 +302,45 @@ class SQLAssistant:
             WHERE p.id = %s
             """
             
-            # Get connection
             connection = get_db()
             cursor = connection.cursor()
             
-            # Execute query
             cursor.execute(query, (user_id,))
-            users = cursor.fetchall()
+            children = cursor.fetchall()
             
-            # Process results
-            if users:
-                children_ids = [user['id_enfant'] for user in users]
+            if children:
+                children_ids = [child['id_enfant'] for child in children]
+                children_prenoms = [child['prenom'] for child in children]
                 logger.info(f"✅ Found {len(children_ids)} children for parent {user_id}")
+                logger.info(f"les prenoms sont {[children_prenoms]}")
             
-            return children_ids
+            return (children_ids, children_prenoms)
+            
         except Exception as e:
-            logger.error(f"❌ Error getting children for parent {user_id}: {str(e)}")
+            logger.error(f"❌ Error getting children data for parent {user_id}: {str(e)}")
             logger.error(traceback.format_exc())
-            return []
+            return ([], [])
+            
         finally:
-            # Only close if we created a direct connection
             try:
                 if cursor:
                     cursor.close()
-                
-                # Check if this is a Flask-managed connection
-                from flask import current_app
-                is_flask_connection = current_app and hasattr(current_app, 'extensions') and 'mysql' in current_app.extensions and connection == current_app.extensions['mysql'].connection
-                
-                if connection and not is_flask_connection:
-                    connection.close()
-                    logger.debug("🔌 Closed direct MySQL connection")
+                    
+                if connection:
+                    from flask import current_app
+                    is_flask_managed = (
+                        current_app and 
+                        hasattr(current_app, 'extensions') and 
+                        'mysql' in current_app.extensions and 
+                        connection == current_app.extensions['mysql'].connection
+                    )
+                    
+                    if not is_flask_managed:
+                        connection.close()
+                        logger.debug("🔌 Closed direct MySQL connection")
             except Exception as close_error:
                 logger.warning(f"⚠️ Error during cleanup: {str(close_error)}")
-
-
+ 
     def validate_parent_access(self, sql_query: str, children_ids: List[int]) -> bool:
         # Validation des inputs
         if not isinstance(children_ids, list):
@@ -409,6 +464,57 @@ class SQLAssistant:
         print(f"✅ Validation parent réussie")
         return True
 
+    def detect_names_in_question(self, question: str, authorized_names: List[str]) -> Dict[str, List[str]]:
+        # Normaliser les prénoms autorisés (enlever accents, mettre en minuscules)
+        def normalize_name(name):
+            import unicodedata
+            name = unicodedata.normalize('NFD', name.lower())
+            return ''.join(char for char in name if unicodedata.category(char) != 'Mn')
+        
+        normalized_authorized = [normalize_name(name) for name in authorized_names]
+        
+        # Mots à exclure (ne sont pas des prénoms)
+        excluded_words = {
+            'mon', 'ma', 'mes', 'le', 'la', 'les', 'de', 'du', 'des', 'et', 'ou', 'si', 'ce', 
+            'cette', 'ces', 'son', 'sa', 'ses', 'notre', 'nos', 'votre', 'vos', 'leur', 'leurs',
+            'enfant', 'enfants', 'fils', 'fille', 'garçon', 'petit', 'petite', 'grand', 'grande',
+            'eleve', 'élève', 'eleves', 'élèves', 'classe', 'école', 'ecole', 'moyenne', 'note', 
+            'notes', 'résultat', 'resultats', 'trimestre', 'année', 'annee', 'matière', 'matiere',
+            'emploi', 'temps', 'horaire', 'professeur', 'enseignant', 'directeur', 'principal'
+        }
+        
+        # Extraire tous les mots qui pourraient être des prénoms (commence par une majuscule)
+        potential_names = re.findall(r'\b[A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞŸ][a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ]+', question)
+        
+        # Filtrer les mots exclus
+        potential_names = [name for name in potential_names if normalize_name(name) not in excluded_words]
+        
+        authorized_found = []
+        unauthorized_found = []
+        
+        for name in potential_names:
+            normalized_name = normalize_name(name)
+            if normalized_name in normalized_authorized:
+                authorized_found.append(name)
+            else:
+                # Vérifier si ce n'est pas juste un mot français commun
+                # (cette liste pourrait être étendue selon les besoins)
+                common_words = {'Merci', 'Bonjour', 'Salut', 'Cordialement', 'Madame', 'Monsieur', 
+                              'Mademoiselle', 'Docteur', 'Professeur', 'Janvier', 'Février', 'Mars', 
+                              'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 
+                              'Novembre', 'Décembre', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 
+                              'Vendredi', 'Samedi', 'Dimanche', 'France', 'Tunisie', 'Français'}
+                
+                if name not in common_words:
+                    unauthorized_found.append(name)
+        
+        print(f"🔍 Prénoms détectés - Autorisés: {authorized_found}, Non autorisés: {unauthorized_found}")
+        
+        return {
+            "authorized_names": authorized_found,
+            "unauthorized_names": unauthorized_found
+        }
+
     def ask_question(self, question: str, user_id: int, roles: List[str]) -> tuple[str, str]:
         """Version strictement authentifiée"""
 
@@ -521,15 +627,19 @@ class SQLAssistant:
             except Exception as db_error:
                 return sql_query, f"❌ Erreur d'exécution SQL : {str(db_error)}"
             
-        children_ids = self.get_user_children_ids(user_id)
+
+        children_ids, children_prenoms = self.get_user_children_data(user_id)
+        children_ids_str = ", ".join(map(str, children_ids))
+        children_names_str = ", ".join(children_prenoms)
         if not children_ids:
              return "", "❌ Aucun enfant trouvé pour ce parent  ou erreur d'accès."
         
         print(f"🔒 Restriction parent - Enfants autorisés: {children_ids}")
-        
-        # Génération via LLM avec template parent
-        children_ids_str = ','.join(map(str, children_ids))
-        
+
+        detected_names = self.detect_names_in_question(question, children_prenoms)
+        if detected_names["unauthorized_names"]:
+            unauthorized_list = ", ".join(detected_names["unauthorized_names"])
+            return "", f"❌ Accès interdit: Vous n'avez pas le droit de consulter les données de {unauthorized_list}"
         relevant_domains = self.get_relevant_domains(question, self.domain_descriptions)
         if relevant_domains:
             # 2. Tables associées
@@ -551,7 +661,8 @@ class SQLAssistant:
             relevant_domain_descriptions=relevant_domain_descriptions,
             relations=self.relations_description,
             user_id=user_id,
-            children_ids=children_ids_str
+            children_ids=children_ids_str,
+            children_names=children_names_str 
         )
         llm_response = self.ask_llm(prompt)
         sql_query = llm_response.replace("```sql", "").replace("```", "").strip()
@@ -559,9 +670,39 @@ class SQLAssistant:
         if not sql_query:
             return "", "❌ La requête générée est vide."
 
-        # Validation de sécurité pour les parents
-        if not self.validate_parent_access(sql_query, children_ids):
-            return "", "❌ Accès refusé: La requête ne respecte pas les restrictions parent."
+        # if not self.validate_parent_access(sql_query, children_ids):
+        #     return "", "❌ Accès refusé: La requête ne respecte pas les restrictions parent."
+
+        def is_public_info_query(question: str, sql_query: str) -> bool:
+            """Vérifie si la question concerne des informations publiques (cantine, actualité)"""
+            question_lower = question.lower()
+            sql_lower = sql_query.lower()
+            
+            # Mots-clés pour la cantine
+            cantine_keywords = ['cantine', 'repas', 'menu', 'déjeuner', 'restauration']
+            
+            # Mots-clés pour l'actualité
+            actualite_keywords = ['actualité', 'actualite', 'actualités', 'actualites', 'nouvelles', 'informations', 'annonces']
+            
+            # Tables liées à la cantine et l'actualité
+            public_tables = ['cantine', 'menu', 'actualite', 'actualite1', 'annonces']
+            
+            # Vérifier les mots-clés dans la question
+            has_cantine_keywords = any(keyword in question_lower for keyword in cantine_keywords)
+            has_actualite_keywords = any(keyword in question_lower for keyword in actualite_keywords)
+            
+            # Vérifier les tables dans la requête SQL
+            has_public_tables = any(table in sql_lower for table in public_tables)
+            
+            return (has_cantine_keywords or has_actualite_keywords or has_public_tables)
+
+    # Validation de sécurité pour les parents (sauf pour cantine/actualité)
+        if not is_public_info_query(question, sql_query):
+            if not self.validate_parent_access(sql_query, children_ids):
+                return "", "❌ Accès refusé: La requête ne respecte pas les restrictions parent."
+        else:
+            print("ℹ️ Question sur information publique (cantine/actualité) - validation de sécurité bypassée")
+
 
         try:
             result = self.db.run(sql_query)
@@ -571,7 +712,6 @@ class SQLAssistant:
         except Exception as db_error:
             return sql_query, f"❌ Erreur d'exécution SQL : {str(db_error)}"
 
-    
     def load_question_templates(self) -> list:
         try:
             templates_path = Path(__file__).parent / 'templates_questions.json'
