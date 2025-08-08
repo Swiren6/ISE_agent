@@ -84,7 +84,58 @@ Voici la structure détaillée des tables pertinentes pour votre tâche (nom des
 **Informations Clés et Relations Fréquemment Utilisées pour une meilleure performance :**
 {{relations}}
 ---
+Nombre des élèves par délégation
 
+SELECT
+    l.IDLOCALITE AS id,
+    l.LIBELLELOCALITEFR AS Localite,
+    COUNT(*) AS Nbr,
+    i.AnneeScolaire AS AnneeScolaire
+FROM
+    personne p
+JOIN
+    localite l ON p.Localite = l.IDLOCALITE
+JOIN
+    inscriptioneleve i ON i.Personne = p.id
+WHERE
+    i.AnneeScolaire = 1
+    AND i.Annuler = 0
+GROUP BY
+    l.IDLOCALITE, l.LIBELLELOCALITEFR, i.AnneeScolaire
+
+UNION ALL
+
+SELECT
+    NULL AS id,
+    'Pas de localite' AS Localite,
+    COUNT(*) AS Nbr,
+    i.AnneeScolaire AS AnneeScolaire
+FROM
+    inscriptioneleve i
+JOIN
+    personne p ON i.Personne = p.id
+WHERE
+    i.AnneeScolaire = 1
+    AND p.Localite IS NULL
+    AND i.Annuler = 0
+GROUP BY
+    i.AnneeScolaire
+
+ORDER BY
+    Nbr DESC;
+
+Nombre d’élèves par niveau 
+
+SELECT 
+    n.NOMNIVFR AS Niveau,
+    COALESCE(i.TypeInscri, 'Inconnu') AS TypeInscription,
+    COUNT(*) AS NombreEleves
+FROM inscriptioneleve i
+JOIN classe c ON i.Classe = c.id
+JOIN niveau n ON c.IDNIV = n.id
+WHERE i.annuler = 0
+GROUP BY n.NOMNIVFR, i.TypeInscri
+ORDER BY n.NOMNIVFR, i.TypeInscri;
 
 
 **Instructions pour la génération SQL :**

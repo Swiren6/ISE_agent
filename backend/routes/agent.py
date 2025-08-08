@@ -193,7 +193,7 @@ def ask_sql():
 
             # 🔥 Exécution de la requête SQL
             try:
-                rows = engine.execute_natural_query(sql_query)  # Doit retourner List[Dict]
+                rows = engine.execute_natural_query(question)  # Doit retourner List[Dict]
             except Exception as e:
                 logger.error(f"Erreur d'exécution SQL : {e}")
                 return jsonify({

@@ -45,7 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _startNotificationPolling() {
     _notificationTimer = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 50),
       (_) => _checkNotifications(),
     );
   }
