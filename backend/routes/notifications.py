@@ -31,9 +31,9 @@ def check_exam_notifications():
                 continue
 
             messages_map = {
-                7: f"📆 L’examen approche ! Prévu dans 7 jours (le {date_exam.strftime('%d/%m/%Y')}).",
-                2: f"📌 Rappel : Examen dans 2 jours (le {date_exam.strftime('%d/%m/%Y')}) pour la classe ID {idClasse} en matière ID {idMatiere}.",
-                1: f"⚠️ Attention ! Examen demain (le {date_exam.strftime('%d/%m/%Y')}) pour la classe ID {idClasse} en matière ID {idMatiere}."
+                7: f" L’examen approche ! Prévu dans 7 jours (le {date_exam.strftime('%d/%m/%Y')}).",
+                2: f" Rappel : Examen dans 2 jours (le {date_exam.strftime('%d/%m/%Y')}) pour la classe ID {idClasse} en matière ID {idMatiere}.",
+                1: f" Attention ! Examen demain (le {date_exam.strftime('%d/%m/%Y')}) pour la classe ID {idClasse} en matière ID {idMatiere}."
             }
             message = messages_map[days_before]
 
