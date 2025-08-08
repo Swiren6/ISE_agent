@@ -15,24 +15,8 @@
     "question_template": "génère l'attestaion de Zeineb SASSI",
     "sql_template": "SELECT p.NomFr, p.PrenomFr, e.id AS id_eleve, i.AnneeScolaire, i.Classe\nFROM personne p\nJOIN eleve e ON p.id = e.IdPersonne\nJOIN inscriptioneleve i ON e.id = i.Eleve\nWHERE p.NomFr = 'SASSI' AND p.PrenomFr = 'Zeineb';"
   },
-  "2c9eba4bcdac40ffdcec5d2b87f0b99f": {
-    "question_template": "Nombre d’élèves par niveau",
-    "sql_template": "SELECT \n    n.NOMNIVFR AS Niveau,\n    COALESCE(i.TypeInscri, 'Inconnu') AS TypeInscription,\n    COUNT(*) AS NombreEleves\nFROM inscriptioneleve i\nJOIN classe c ON i.Classe = c.id\nJOIN niveau n ON c.IDNIV = n.id\nWHERE i.Annuler = 0\nGROUP BY n.NOMNIVFR, i.TypeInscri\nORDER BY n.NOMNIVFR, i.TypeInscri;"
-  },
-  "4c60dc9bcebbb52f43bce9242c2d6a2a": {
-    "question_template": "Nombres d'élèves par niveau courbe",
-    "sql_template": "SELECT \n    n.NOMNIVFR AS Niveau,\n    COUNT(*) AS NombreEleves\nFROM inscriptioneleve i\nJOIN classe c ON i.Classe = c.id\nJOIN niveau n ON c.IDNIV = n.id\nWHERE i.annuler = 0\nGROUP BY n.NOMNIVFR\nORDER BY n.NOMNIVFR;"
-  },
-  "01f571b461ce2771080f42cc867c0b78": {
-    "question_template": "Nombre des élèves par délégation pie chart",
-    "sql_template": "SELECT\n    l.IDLOCALITE AS id,\n    l.LIBELLELOCALITEFR AS Localite,\n    COUNT(*) AS Nbr\nFROM\n    personne p\nJOIN\n    localite l ON p.Localite = l.IDLOCALITE\nJOIN\n    inscriptioneleve i ON i.Personne = p.id\nWHERE\n    i.Annuler = 0\nGROUP BY\n    l.IDLOCALITE, l.LIBELLELOCALITEFR\n\nUNION ALL\n\nSELECT\n    NULL AS id,\n    'Pas de localite' AS Localite,\n    COUNT(*) AS Nbr\nFROM\n    inscriptioneleve i\nJOIN\n    personne p ON i.Personne = p.id\nWHERE\n    p.Localite IS NULL\n    AND i.Annuler = 0\nGROUP BY\n    i.AnneeScolaire\n\nORDER BY\n    Nbr DESC;"
-  },
-  "eb4a9f975efd8a669b7ebad09ae05b64": {
-    "question_template": "Nombre des élèves par délégation sous forme de courbe",
-    "sql_template": "SELECT\n    l.IDLOCALITE AS id,\n    l.LIBELLELOCALITEFR AS Localite,\n    COUNT(*) AS Nbr,\n    i.AnneeScolaire AS AnneeScolaire\nFROM\n    personne p\nJOIN\n    localite l ON p.Localite = l.IDLOCALITE\nJOIN\n    inscriptioneleve i ON i.Personne = p.id\nWHERE\n    i.Annuler = 0\nGROUP BY\n    l.IDLOCALITE, l.LIBELLELOCALITEFR, i.AnneeScolaire\n\nUNION ALL\n\nSELECT\n    NULL AS id,\n    'Pas de localite' AS Localite,\n    COUNT(*) AS Nbr,\n    i.AnneeScolaire AS AnneeScolaire\nFROM\n    inscriptioneleve i\nJOIN\n    personne p ON i.Personne = p.id\nWHERE\n    p.Localite IS NULL\n    AND i.Annuler = 0\nGROUP BY\n    i.AnneeScolaire\n\nORDER BY\n    Nbr DESC;"
-  },
-  "3875e663947a329d0f8e511d5609f587": {
-    "question_template": "Nombre des élèves par délégation sous forme de pie chart",
-    "sql_template": "SELECT\n    l.IDLOCALITE AS id,\n    l.LIBELLELOCALITEFR AS Localite,\n    COUNT(*) AS Nbr\nFROM\n    personne p\nJOIN\n    localite l ON p.Localite = l.IDLOCALITE\nJOIN\n    inscriptioneleve i ON i.Personne = p.id\nWHERE\n    i.Annuler = 0\nGROUP BY\n    l.IDLOCALITE, l.LIBELLELOCALITEFR\n\nUNION ALL\n\nSELECT\n    NULL AS id,\n    'Pas de localite' AS Localite,\n    COUNT(*) AS Nbr\nFROM\n    inscriptioneleve i\nJOIN\n    personne p ON i.Personne = p.id\nWHERE\n    p.Localite IS NULL\n    AND i.Annuler = 0\nGROUP BY\n    i.AnneeScolaire;"
+    "0000f5675d9fd65320e3f21935b590b9": {
+    "question_template": "donne moi le nombre des eleves inscris {AnneeScolaire}",
+    "sql_template": "SELECT COUNT(*) AS nombre_eleves_inscrits\nFROM inscriptioneleve\nWHERE AnneeScolaire = (SELECT id FROM anneescolaire WHERE AnneeScolaire = '{AnneeScolaire}');"
   }
 }

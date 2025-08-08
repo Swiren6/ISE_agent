@@ -9,10 +9,19 @@ import re
 from agent.sql_agent import SQLAgent 
 from agent.pdf_utils.attestation import export_attestation_pdf
 import os
+
+from flask import Blueprint, request, jsonify,g
+from flask_jwt_extended import get_jwt_identity,verify_jwt_in_request,get_jwt, get_jwt_identity
+import logging
+import traceback
+import datetime
+from routes.auth import login
+from services.auth_service import AuthService
+
 agent_bp = Blueprint('agent_bp', __name__)
 logger = logging.getLogger(__name__)
 
-# Initialisation assistant avec gestion d'erreurs
+
 assistant = None
 engine = SQLAgent(get_db_connection())
 def validate_name(full_name):
@@ -45,22 +54,46 @@ initialize_assistant()
 
 @agent_bp.route('/ask', methods=['POST'])
 def ask_sql():
-    """Endpoint principal avec gestion d'erreurs robuste"""
+    """Version corrigée pour lire le JWT avec claims"""
     
-    # Gestion JWT optionnelle
     jwt_valid = False
     current_user = None
+    jwt_error = None
     
     try:
         if 'Authorization' in request.headers:
-            verify_jwt_in_request(optional=True)
-            current_user = get_jwt_identity()
-            jwt_valid = True
-    except Exception:
-        pass  # JWT optionnel
+            try:
+                verify_jwt_in_request(optional=True)
+                
+                # Récupération de l'identity (subject)
+                jwt_identity = get_jwt_identity()  # Sera une string maintenant
+                
+                # Récupération des claims additionnels
+                jwt_claims = get_jwt()
+                
+                print(f"DEBUG - JWT Identity: {jwt_identity}")
+                print(f"DEBUG - JWT Claims: {jwt_claims}")
+                
+                # Construction de current_user
+                if jwt_identity and jwt_claims:
+                    current_user = {
+                        'sub': jwt_identity,
+                        'idpersonne': jwt_claims.get('idpersonne'),
+                        'roles': jwt_claims.get('roles', []),
+                        'username': jwt_claims.get('username', '')
+                    }
+                    jwt_valid = True
+                    
+            except Exception as jwt_exc:
+                jwt_error = str(jwt_exc)
+                print(f"DEBUG - Erreur JWT: {jwt_error}")
+                current_user = None
+                
+    except Exception as e:
+        jwt_error = str(e)
+        print(f"DEBUG - Erreur générale JWT: {jwt_error}")
     
     try:
-        # Validation JSON
         if not request.is_json:
             return jsonify({"error": "Content-Type application/json requis"}), 415
         
@@ -84,9 +117,13 @@ def ask_sql():
                 "received_fields": list(data.keys())
             }), 422
         
+        user_id = current_user.get('idpersonne') if current_user else None
+        roles = current_user.get('roles', []) if current_user else []
+        
+        print(f"DEBUG FINAL - user_id: {user_id}, roles: {roles}")
+        
         # Vérification assistant
         if not assistant:
-            # Tentative de réinitialisation
             if not initialize_assistant():
                 return jsonify({
                     "error": "Assistant non disponible",
@@ -185,9 +222,26 @@ def ask_sql():
                 "question": question
             }), 500
     
+        
+        sql_query, response = assistant.ask_question(question, user_id, roles)
+        
+        result = {
+            "sql_query": sql_query,
+            "response": response,
+            "status": "success",
+            "question": question,
+            "debug": {
+                "jwt_valid": jwt_valid,
+                "jwt_error": jwt_error,
+                "user_id": user_id,
+                "roles": roles
+            }
+        }
+        
+        return jsonify(result), 200
+        
     except Exception as e:
         logger.error(f"Erreur générale: {e}")
-        logger.error(traceback.format_exc())
         return jsonify({
             "error": "Erreur serveur interne",
             "details": str(e)
@@ -204,6 +258,7 @@ def ask_info():
         "assistant_available": assistant is not None
     })
 
+
 @agent_bp.route('/health', methods=['GET'])
 def health():
     """Vérification de santé détaillée"""
@@ -211,7 +266,7 @@ def health():
         "status": "OK",
         "assistant": "OK" if assistant else "ERROR",
         "database": "OK" if assistant and assistant.db else "ERROR",
-        "timestamp": "2024-01-01T00:00:00Z"  # Vous pouvez ajouter datetime.utcnow().isoformat()
+        "timestamp": "2024-01-01T00:00:00Z"  
     }
     
     status_code = 200 if assistant else 503
@@ -231,3 +286,4 @@ def reinitialize():
             "success": False,
             "error": str(e)
         }), 500
+
